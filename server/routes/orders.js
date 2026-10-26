@@ -8,6 +8,7 @@ const { countPages } = require("../utils/pdf");
 const { requireAuth, requireRole } = require("../middleware/auth");
 const staff = [requireAuth, requireRole("manager", "admin", "superadmin")];
 const boss = [requireAuth, requireRole("admin", "superadmin")];
+const { parsePageRange } = require("../utils/pageRange");
 
 const rateLimit = require("express-rate-limit");
 
@@ -31,47 +32,51 @@ function makeTrackingCode() {
 }
 
 async function createOrder(body, source, file) {
-    const { customerName, phone } = body;
+  const { customerName, phone } = body;
 
-    if (!/^[0-9]{10}$/.test(phone || "")) {
-        throw new Error("Phone number must be 10 digits");
-    }
+  if (!/^[0-9]{10}$/.test(phone || "")) {
+    throw new Error("Phone number must be 10 digits");
+  }
 
-    let pages = Number(body.pages);
-    let fileData = { fileName: body.fileName || "" };
+  let pages = Number(body.pages);
+  let fileData = { fileName: body.fileName || "" };
 
-    if (file) {
-        pages = await countPages(file); // server decides the page count
-        fileData = { ...(await saveFile(file.buffer)), fileName: file.originalname };
-    }
+  if (file) {
+    pages = await countPages(file); // server decides the total
+    fileData = { ...(await saveFile(file.buffer)), fileName: file.originalname };
+  }
 
-    const options = {
-        pages,
-        copies: Number(body.copies) || 1,
-        color: toBool(body.color),
-        size: body.size === "A3" ? "A3" : "A4",
-        doubleSided: toBool(body.doubleSided),
+  try {
+    if (!(pages >= 1)) throw new Error("Pages must be 1 or more");
+    const range = parsePageRange(body.pageRange, pages);
+
+    const printOptions = {
+      copies: Number(body.copies) || 1,
+      color: toBool(body.color),
+      size: body.size === "A3" ? "A3" : "A4",
+      doubleSided: toBool(body.doubleSided),
     };
+    const price = calculatePrice({ ...printOptions, pages: range.count });
 
-    const price = calculatePrice(options);
-
-    try {
-        return await Order.create({
-            trackingCode: makeTrackingCode(),
-            source,
-            customerName,
-            phone,
-            ...fileData,
-            ...options,
-            price,
-        });
-    } catch (err) {
-        // order failed: remove the file we just uploaded so it isn't left behind
-        if (fileData.filePublicId) {
-            deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(() => { });
-        }
-        throw err;
+    return await Order.create({
+      trackingCode: makeTrackingCode(),
+      source,
+      customerName,
+      phone,
+      ...fileData,
+      pages,
+      printPages: range.count,
+      pageRange: range.normalized,
+      ...printOptions,
+      price,
+    });
+  } catch (err) {
+    // order failed: remove the uploaded file so it isn't left behind
+    if (fileData.filePublicId) {
+      deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(() => {});
     }
+    throw err;
+  }
 }
 
 // Public price list
@@ -84,15 +89,23 @@ router.get("/rates", (req, res) => {
 
 // Price preview (saves nothing)
 router.post("/quote", (req, res) => {
-    const options = {
-        pages: Number(req.body.pages) || 0,
-        copies: Number(req.body.copies) || 1,
-        color: toBool(req.body.color),
-        size: req.body.size === "A3" ? "A3" : "A4",
-        doubleSided: toBool(req.body.doubleSided),
-    };
-    if (options.pages < 1 || options.copies < 1) return res.json({ price: 0 });
-    res.json({ price: calculatePrice(options) });
+  const total = Number(req.body.pages) || 0;
+  const copies = Number(req.body.copies) || 1;
+  if (total < 1 || copies < 1) return res.json({ price: 0, printPages: 0 });
+
+  try {
+    const range = parsePageRange(req.body.pageRange, total);
+    const price = calculatePrice({
+      pages: range.count,
+      copies,
+      color: toBool(req.body.color),
+      size: req.body.size === "A3" ? "A3" : "A4",
+      doubleSided: toBool(req.body.doubleSided),
+    });
+    res.json({ price, printPages: range.count });
+  } catch (err) {
+    res.json({ price: 0, printPages: 0, error: err.message });
+  }
 });
 
 // Count pages of a chosen file (saves nothing)

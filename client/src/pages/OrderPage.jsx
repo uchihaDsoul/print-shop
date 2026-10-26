@@ -7,6 +7,7 @@ const initialForm = {
   customerName: "",
   phone: "",
   pages: 0,
+  pageRange: "",
   copies: 1,
   color: false,
   size: "A4",
@@ -18,6 +19,8 @@ export default function OrderPage() {
   const [file, setFile] = useState(null);
   const [counting, setCounting] = useState(false);
   const [price, setPrice] = useState(0);
+  const [printPages, setPrintPages] = useState(0);
+  const [rangeError, setRangeError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [placed, setPlaced] = useState(null);
@@ -58,14 +61,19 @@ export default function OrderPage() {
     let cancelled = false;
     const timer = setTimeout(() => {
       getQuote(form)
-        .then((data) => !cancelled && setPrice(data.price))
+        .then((data) => {
+          if (cancelled) return;
+          setPrice(data.price);
+          setPrintPages(data.printPages || 0);
+          setRangeError(data.error || "");
+        })
         .catch(() => !cancelled && setPrice(0));
     }, 300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [form.pages, form.copies, form.color, form.size, form.doubleSided]);
+  }, [form.pages, form.pageRange, form.copies, form.color, form.size, form.doubleSided]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -132,6 +140,22 @@ export default function OrderPage() {
         {counting && <p className="note">Reading your file...</p>}
         {file && <p className="note">✓ {file.name}: <strong>{form.pages}</strong> page(s) found</p>}
 
+        {file && (
+          <label>
+            Pages to print (optional)
+            <input
+              name="pageRange"
+              value={form.pageRange}
+              onChange={handleChange}
+              placeholder="e.g. 1-5, 8, 10-12 (blank = all pages)"
+            />
+          </label>
+        )}
+        {rangeError && <p className="error">{rangeError}</p>}
+        {file && !rangeError && (
+          <p className="note">Printing <strong>{printPages}</strong> of {form.pages} page(s)</p>
+        )}
+        
         <h3>3. Print options</h3>
         <div className="row">
           <label>

@@ -5,7 +5,7 @@ import { listOrders, updateOrder, deleteOrder, getStats, createWalkin, getFileLi
 import { getQuote } from "../api";
 
 const STATUSES = ["pending", "printing", "ready", "collected"];
-const blank = { customerName: "", phone: "", pages: 1, copies: 1, color: false, size: "A4", doubleSided: false };
+const blank = { customerName: "", phone: "", pages: 1, pageRange: "", copies: 1, color: false, size: "A4", doubleSided: false };
 
 export default function AdminPage() {
   const { user, logout } = useAuth();
@@ -43,7 +43,7 @@ export default function AdminPage() {
       .then((d) => !cancelled && setPrice(d.price))
       .catch(() => !cancelled && setPrice(0));
     return () => { cancelled = true; };
-  }, [form.pages, form.copies, form.color, form.size, form.doubleSided]);
+  }, [form.pages, form.pageRange, form.copies, form.color, form.size, form.doubleSided]);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;

@@ -14,6 +14,8 @@ const orderSchema = new mongoose.Schema(
     fileResourceType: { type: String, default: "" },
     fileFormat: { type: String, default: "" },
     pages: { type: Number, required: true, min: 1 },
+    printPages: { type: Number, default: 0 }, // pages actually printed
+    pageRange: { type: String, default: "" }, // e.g. "1-5,8"
     copies: { type: Number, required: true, min: 1, default: 1 },
     color: { type: Boolean, default: false },
     size: { type: String, enum: ["A4", "A3"], default: "A4" },
