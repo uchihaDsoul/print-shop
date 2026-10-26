@@ -140,6 +140,10 @@ export default function AdminPage() {
           File (optional, pages are counted automatically)
           <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={(e) => setFile(e.target.files[0] || null)} />
         </label>
+        <label>
+          Pages to print (optional)
+          <input name="pageRange" value={form.pageRange} onChange={handleChange} placeholder="e.g. 1-5, 8 (blank = all)" />
+        </label>
         <div className="row">
           <label>Pages{file && " (auto)"}<input type="number" min="1" name="pages" value={form.pages} onChange={handleChange} disabled={Boolean(file)} /></label>
           <label>Copies<input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} /></label>
@@ -174,7 +178,7 @@ export default function AdminPage() {
             </div>
             <div>{o.customerName} · {o.phone}</div>
             <div>
-              {o.pages} pages × {o.copies} · {o.size} · {o.color ? "Color" : "B/W"} · {o.doubleSided ? "Double" : "Single"}-sided
+              {o.printPages || o.pages} of {o.pages} pages{o.pageRange ? ` (${o.pageRange})` : ""} × {o.copies} · {o.size} · {o.color ? "Color" : "B/W"} · {o.doubleSided ? "Double" : "Single"}-sided
             </div>
             <div>₹{o.price} · {o.paid ? "Paid" : "Not paid"} · {new Date(o.createdAt).toLocaleString()}</div>
             <div className="actions">
