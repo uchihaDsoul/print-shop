@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { listUsers, createUser, updateUser, deleteUser } from "../adminApi";
 
@@ -40,9 +39,6 @@ export default function UsersPage() {
 
   return (
     <>
-      <div className="bar">
-        <Link to="/admin">← Back to orders</Link>
-      </div>
       {error && <p className="error">{error}</p>}
 
       <form className="card" onSubmit={handleCreate}>
