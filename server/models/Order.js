@@ -20,6 +20,10 @@ const orderSchema = new mongoose.Schema(
     color: { type: Boolean, default: false },
     size: { type: String, enum: ["A4", "A3"], default: "A4" },
     doubleSided: { type: Boolean, default: false },
+    stapling: { type: Boolean, default: false },
+    binding: { type: Boolean, default: false },
+    urgent: { type: Boolean, default: false },
+    note: { type: String, default: "", maxlength: 300, trim: true },
 
     price: { type: Number, required: true },
     paid: { type: Boolean, default: false },

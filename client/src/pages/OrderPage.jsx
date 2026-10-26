@@ -12,6 +12,10 @@ const initialForm = {
   color: false,
   size: "A4",
   doubleSided: false,
+    stapling: false,
+  binding: false,
+  urgent: false,
+  note: "",
 };
 
 export default function OrderPage() {
@@ -73,7 +77,7 @@ export default function OrderPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [form.pages, form.pageRange, form.copies, form.color, form.size, form.doubleSided]);
+    }, [form.pages, form.pageRange, form.copies, form.color, form.size, form.doubleSided, form.stapling, form.binding, form.urgent]);
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -178,6 +182,31 @@ export default function OrderPage() {
         <label className="check">
           <input type="checkbox" name="doubleSided" checked={form.doubleSided} onChange={handleChange} />
           Double-sided
+        </label>
+
+                <h3>4. Finishing</h3>
+        <label className="check">
+          <input type="checkbox" name="stapling" checked={form.stapling} onChange={handleChange} />
+          Stapling
+        </label>
+        <label className="check">
+          <input type="checkbox" name="binding" checked={form.binding} onChange={handleChange} />
+          Spiral binding
+        </label>
+        <label className="check">
+          <input type="checkbox" name="urgent" checked={form.urgent} onChange={handleChange} />
+          Urgent (priority printing)
+        </label>
+        <label>
+          Note for the shop (optional)
+          <textarea
+            name="note"
+            value={form.note}
+            onChange={handleChange}
+            maxLength={300}
+            rows={3}
+            placeholder="e.g. Staple top-left, use thick paper"
+          />
         </label>
 
         <div className="price">

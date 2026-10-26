@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const Order = require("../models/Order");
-const { calculatePrice, RATES, DOUBLE_SIDED_FACTOR } = require("../utils/pricing");
+const { calculatePrice, RATES, DOUBLE_SIDED_FACTOR, EXTRAS } = require("../utils/pricing");
 const { saveFile, getTempUrl, deleteFile } = require("../utils/storage");
 const { uploadOne } = require("../utils/upload");
 const { countPages } = require("../utils/pdf");
@@ -28,7 +28,7 @@ const router = express.Router();
 const toBool = (v) => v === true || v === "true" || v === "on";
 
 function makeTrackingCode() {
-    return crypto.randomBytes(5).toString("hex").toUpperCase(); //10 characters
+  return crypto.randomBytes(5).toString("hex").toUpperCase(); //10 characters
 }
 
 async function createOrder(body, source, file) {
@@ -55,7 +55,11 @@ async function createOrder(body, source, file) {
       color: toBool(body.color),
       size: body.size === "A3" ? "A3" : "A4",
       doubleSided: toBool(body.doubleSided),
+      stapling: toBool(body.stapling),
+      binding: toBool(body.binding),
+      urgent: toBool(body.urgent),
     };
+    const note = String(body.note || "").slice(0, 300);
     const price = calculatePrice({ ...printOptions, pages: range.count });
 
     return await Order.create({
@@ -73,7 +77,7 @@ async function createOrder(body, source, file) {
   } catch (err) {
     // order failed: remove the uploaded file so it isn't left behind
     if (fileData.filePublicId) {
-      deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(() => {});
+      deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(() => { });
     }
     throw err;
   }
@@ -83,6 +87,7 @@ async function createOrder(body, source, file) {
 router.get("/rates", (req, res) => {
   res.json({
     rates: RATES,
+    extras: EXTRAS,
     doubleSidedDiscountPercent: Math.round((1 - DOUBLE_SIDED_FACTOR) * 100),
   });
 });
@@ -101,6 +106,9 @@ router.post("/quote", (req, res) => {
       color: toBool(req.body.color),
       size: req.body.size === "A3" ? "A3" : "A4",
       doubleSided: toBool(req.body.doubleSided),
+      stapling: toBool(req.body.stapling),
+      binding: toBool(req.body.binding),
+      urgent: toBool(req.body.urgent),
     });
     res.json({ price, printPages: range.count });
   } catch (err) {
@@ -110,50 +118,50 @@ router.post("/quote", (req, res) => {
 
 // Count pages of a chosen file (saves nothing)
 router.post("/pagecount", orderLimiter, uploadOne, async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "No file received" });
-    try {
-        res.json({ pages: await countPages(req.file) });
-    } catch (err) {
-        res.status(400).json({ error: "Could not read this file. It may be damaged." });
-    }
+  if (!req.file) return res.status(400).json({ error: "No file received" });
+  try {
+    res.json({ pages: await countPages(req.file) });
+  } catch (err) {
+    res.status(400).json({ error: "Could not read this file. It may be damaged." });
+  }
 });
 
 // Online order: file is required
 router.post("/online", orderLimiter, uploadOne, async (req, res) => {
-    if (!req.file) return res.status(400).json({ error: "Please attach a file" });
-    try {
-        res.status(201).json(await createOrder(req.body, "online", req.file));
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
+  if (!req.file) return res.status(400).json({ error: "Please attach a file" });
+  try {
+    res.status(201).json(await createOrder(req.body, "online", req.file));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Walk-in order: file is optional (protect with login later)
 router.post("/walkin", ...staff, uploadOne, async (req, res) => {
-    try {
-        res.status(201).json(await createOrder(req.body, "walkin", req.file));
-    } catch (err) {
-        res.status(400).json({ error: err.message });
-    }
+  try {
+    res.status(201).json(await createOrder(req.body, "walkin", req.file));
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 router.get("/track/:code", trackLimiter, async (req, res) => {
-    const order = await Order.findOne({ trackingCode: req.params.code.toUpperCase() });
-    if (!order) return res.status(404).json({ error: "Order not found" });
-    res.json({
-        trackingCode: order.trackingCode,
-        status: order.status,
-        price: order.price,
-        paid: order.paid,
-    });
+  const order = await Order.findOne({ trackingCode: req.params.code.toUpperCase() });
+  if (!order) return res.status(404).json({ error: "Order not found" });
+  res.json({
+    trackingCode: order.trackingCode,
+    status: order.status,
+    price: order.price,
+    paid: order.paid,
+  });
 });
 
 // Admin list (protect later)
 router.get("/", ...staff, async (req, res) => {
-    const filter = {};
-    if (req.query.status) filter.status = req.query.status;
-    if (req.query.source) filter.source = req.query.source;
-    res.json(await Order.find(filter).sort({ createdAt: -1 }));
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  if (req.query.source) filter.source = req.query.source;
+  res.json(await Order.find(filter).sort({ createdAt: -1 }));
 });
 
 // Staff only: get a temporary link to the order's file
@@ -169,62 +177,62 @@ router.get("/:id/file", ...staff, async (req, res) => {
 
 // Admin update (protect later). Deletes the file when order is collected.
 router.patch("/:id", ...staff, async (req, res) => {
-    try {
-        const order = await Order.findById(req.params.id);
-        if (!order) return res.status(404).json({ error: "Order not found" });
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
-        if (req.body.status) order.status = req.body.status;
-        if (typeof req.body.paid === "boolean") order.paid = req.body.paid;
+    if (req.body.status) order.status = req.body.status;
+    if (typeof req.body.paid === "boolean") order.paid = req.body.paid;
 
-        if (order.status === "collected" && order.filePublicId) {
-            try {
-                await deleteFile(order.filePublicId, order.fileResourceType);
-                order.fileUrl = "";
-                order.filePublicId = "";
-                order.fileResourceType = "";
-            } catch (e) {
-                console.error("File delete failed:", e.message);
-            }
-        }
-
-        await order.save();
-        res.json(order);
-    } catch (err) {
-        res.status(400).json({ error: err.message });
+    if (order.status === "collected" && order.filePublicId) {
+      try {
+        await deleteFile(order.filePublicId, order.fileResourceType);
+        order.fileUrl = "";
+        order.filePublicId = "";
+        order.fileResourceType = "";
+      } catch (e) {
+        console.error("File delete failed:", e.message);
+      }
     }
+
+    await order.save();
+    res.json(order);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 // Today's totals, split by online and walk-in (admin and super admin only)
 router.get("/stats", ...boss, async (req, res) => {
-    // midnight today in India time (IST = UTC+5:30, no daylight saving)
-    const IST = 5.5 * 60 * 60 * 1000;
-    const nowIST = new Date(Date.now() + IST);
-    nowIST.setUTCHours(0, 0, 0, 0);
-    const start = new Date(nowIST.getTime() - IST);
+  // midnight today in India time (IST = UTC+5:30, no daylight saving)
+  const IST = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(Date.now() + IST);
+  nowIST.setUTCHours(0, 0, 0, 0);
+  const start = new Date(nowIST.getTime() - IST);
 
-    const rows = await Order.aggregate([
-        { $match: { createdAt: { $gte: start } } },
-        {
-            $group: {
-                _id: "$source",
-                orders: { $sum: 1 },
-                total: { $sum: "$price" },
-                paidTotal: { $sum: { $cond: ["$paid", "$price", 0] } },
-            },
-        },
-    ]);
-    res.json(rows);
+  const rows = await Order.aggregate([
+    { $match: { createdAt: { $gte: start } } },
+    {
+      $group: {
+        _id: "$source",
+        orders: { $sum: 1 },
+        total: { $sum: "$price" },
+        paidTotal: { $sum: { $cond: ["$paid", "$price", 0] } },
+      },
+    },
+  ]);
+  res.json(rows);
 });
 
 // Delete an order and its file (admin and super admin only)
 router.delete("/:id", ...boss, async (req, res) => {
-    const order = await Order.findById(req.params.id);
-    if (!order) return res.status(404).json({ error: "Order not found" });
-    if (order.filePublicId) {
-        await deleteFile(order.filePublicId, order.fileResourceType).catch(() => { });
-    }
-    await order.deleteOne();
-    res.json({ ok: true });
+  const order = await Order.findById(req.params.id);
+  if (!order) return res.status(404).json({ error: "Order not found" });
+  if (order.filePublicId) {
+    await deleteFile(order.filePublicId, order.fileResourceType).catch(() => { });
+  }
+  await order.deleteOne();
+  res.json({ ok: true });
 });
 
 module.exports = router;

@@ -34,6 +34,17 @@ export default function PriceList() {
       {data.doubleSidedDiscountPercent > 0 && (
         <p className="note">Double-sided printing: {data.doubleSidedDiscountPercent}% off.</p>
       )}
+
+            {data.extras && (
+        <>
+          <h3>Extras</h3>
+          <p className="note">
+            Stapling: {data.extras.stapling ? `₹${data.extras.stapling} per copy` : "free"} ·
+            Spiral binding: ₹{data.extras.binding} per copy ·
+            Urgent: ₹{data.extras.urgent} per order
+          </p>
+        </>
+      )}
     </div>
   );
 }
