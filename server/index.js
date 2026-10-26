@@ -7,6 +7,7 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 
 const app = express();
+app.set("trust proxy", 1);
 app.use(cors());
 app.use(express.json());
 
@@ -15,6 +16,8 @@ app.get("/api/health", (req, res) => {
 });
 
 app.use("/api/orders", require("./routes/orders"));
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/users", require("./routes/users"));
 
 const PORT = process.env.PORT || 5000;
 
