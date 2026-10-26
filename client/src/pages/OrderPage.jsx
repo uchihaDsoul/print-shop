@@ -84,77 +84,88 @@ export default function OrderPage() {
   if (placed) {
     return (
       <div className="card success">
+        <div className="tick">✓</div>
         <h2>Order placed!</h2>
-        <p>Your tracking code:</p>
+        <p className="note">Save this code to track your order:</p>
         <p className="code">{placed.trackingCode}</p>
-        <p>Total: ₹{placed.price}</p>
-        <p>Save this code to check your order status.</p>
+        <p>Total: <strong>₹{placed.price}</strong> (pay at the shop)</p>
         <button onClick={() => setPlaced(null)}>Place another order</button>
       </div>
     );
   }
 
-  return (
-    <form className="card" onSubmit={handleSubmit}>
-      <h2>New print order</h2>
+    return (
+    <>
+      <div className="hero">
+        <h2>Print in minutes</h2>
+        <p>Upload your file, pick your options, collect it at the shop.</p>
+      </div>
 
-      <label>
-        Your name
-        <input name="customerName" value={form.customerName} onChange={handleChange} required />
-      </label>
+      <form className="card" onSubmit={handleSubmit}>
+        <h3>1. Your details</h3>
+        <div className="row">
+          <label>
+            Your name
+            <input name="customerName" value={form.customerName} onChange={handleChange} required />
+          </label>
+          <label>
+            Phone number
+            <input
+              name="phone"
+              value={form.phone}
+              onChange={handleChange}
+              required
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              title="Enter a 10-digit phone number"
+            />
+          </label>
+        </div>
 
-      <label>
-        Phone number
-        <input
-          name="phone"
-          value={form.phone}
-          onChange={handleChange}
-          required
-          inputMode="numeric"
-          pattern="[0-9]{10}"
-          title="Enter a 10-digit phone number"
-        />
-      </label>
+        <h3>2. Your file</h3>
+        <label>
+          PDF, JPG or PNG (max 20 MB)
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFile} required />
+        </label>
+        {counting && <p className="note">Reading your file...</p>}
+        {file && <p className="note">✓ {file.name}: <strong>{form.pages}</strong> page(s) found</p>}
 
-      <label>
-        Your file (PDF, JPG or PNG, max 20 MB)
-        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFile} required />
-      </label>
-      {counting && <p>Reading your file...</p>}
-      {file && <p>Pages found: <strong>{form.pages}</strong></p>}
+        <h3>3. Print options</h3>
+        <div className="row">
+          <label>
+            Copies
+            <input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} required />
+          </label>
+          <label>
+            Paper size
+            <select name="size" value={form.size} onChange={handleChange}>
+              <option value="A4">A4</option>
+              <option value="A3">A3</option>
+            </select>
+          </label>
+        </div>
 
-      <label>
-        Copies
-        <input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} required />
-      </label>
+        <label className="check">
+          <input type="checkbox" name="color" checked={form.color} onChange={handleChange} />
+          Color print
+        </label>
+        <label className="check">
+          <input type="checkbox" name="doubleSided" checked={form.doubleSided} onChange={handleChange} />
+          Double-sided
+        </label>
 
-      <label>
-        Paper size
-        <select name="size" value={form.size} onChange={handleChange}>
-          <option value="A4">A4</option>
-          <option value="A3">A3</option>
-        </select>
-      </label>
+        <div className="price">
+          <span>Estimated price</span>
+          <strong>₹{price}</strong>
+        </div>
 
-      <label className="check">
-        <input type="checkbox" name="color" checked={form.color} onChange={handleChange} />
-        Color print
-      </label>
+        <p className="note">🔒 Your file is deleted after you collect your prints.</p>
+        {error && <p className="error">{error}</p>}
 
-      <label className="check">
-        <input type="checkbox" name="doubleSided" checked={form.doubleSided} onChange={handleChange} />
-        Double-sided
-      </label>
-
-      <div className="price">Estimated price: ₹{price}</div>
-
-      <p className="note">Your file is deleted after you collect your prints.</p>
-
-      {error && <p className="error">{error}</p>}
-
-      <button type="submit" disabled={loading || counting || !file}>
-        {loading ? "Placing order..." : "Place order"}
-      </button>
-    </form>
+        <button type="submit" disabled={loading || counting || !file}>
+          {loading ? "Placing order..." : "Place order"}
+        </button>
+      </form>
+    </>
   );
 }

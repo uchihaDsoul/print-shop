@@ -105,15 +105,19 @@ export default function AdminPage() {
 
       {error && <p className="error">{error}</p>}
 
-      {isBoss && (
+            {isBoss && (
         <div className="card">
           <h2>Today</h2>
-          {stats.length === 0 && <p>No orders yet today.</p>}
-          {stats.map((s) => (
-            <p key={s._id}>
-              <strong>{s._id}</strong>: {s.orders} orders, ₹{s.total} total, ₹{s.paidTotal} paid
-            </p>
-          ))}
+          {stats.length === 0 && <p className="note">No orders yet today.</p>}
+          <div className="stats">
+            {stats.map((s) => (
+              <div className="stat" key={s._id}>
+                <div className="label">{s._id}</div>
+                <div className="big">₹{s.total}</div>
+                <div className="sub">{s.orders} orders · ₹{s.paidTotal} paid</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
