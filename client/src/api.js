@@ -29,3 +29,4 @@ export const placeOrder = (form, file) => {
 };
 
 export const trackOrder = (code) => request(`/track/${encodeURIComponent(code)}`);
+export const getRates = () => request("/rates");

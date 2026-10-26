@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { getQuote, placeOrder, countPages } from "../api";
+import PriceList from "../components/PriceList";
+import ShopInfo from "../components/ShopInfo";
 
 const initialForm = {
   customerName: "",
@@ -94,7 +96,7 @@ export default function OrderPage() {
     );
   }
 
-    return (
+  return (
     <>
       <div className="hero">
         <h2>Print in minutes</h2>
@@ -166,6 +168,8 @@ export default function OrderPage() {
           {loading ? "Placing order..." : "Place order"}
         </button>
       </form>
+      <PriceList />
+      <ShopInfo />
     </>
   );
 }

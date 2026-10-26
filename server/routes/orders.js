@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const Order = require("../models/Order");
-const { calculatePrice } = require("../utils/pricing");
+const { calculatePrice, RATES, DOUBLE_SIDED_FACTOR } = require("../utils/pricing");
 const { saveFile, deleteFile } = require("../utils/storage");
 const { uploadOne } = require("../utils/upload");
 const { countPages } = require("../utils/pdf");
@@ -73,6 +73,14 @@ async function createOrder(body, source, file) {
         throw err;
     }
 }
+
+// Public price list
+router.get("/rates", (req, res) => {
+  res.json({
+    rates: RATES,
+    doubleSidedDiscountPercent: Math.round((1 - DOUBLE_SIDED_FACTOR) * 100),
+  });
+});
 
 // Price preview (saves nothing)
 router.post("/quote", (req, res) => {
