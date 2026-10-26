@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import { getQuote, placeOrder } from "../api";
+import { getQuote, placeOrder, countPages } from "../api";
 
 const initialForm = {
   customerName: "",
   phone: "",
-  fileName: "",
-  pages: 1,
+  pages: 0,
   copies: 1,
   color: false,
   size: "A4",
@@ -14,15 +13,42 @@ const initialForm = {
 
 export default function OrderPage() {
   const [form, setForm] = useState(initialForm);
+  const [file, setFile] = useState(null);
+  const [counting, setCounting] = useState(false);
   const [price, setPrice] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [placed, setPlaced] = useState(null);
 
-  // One handler for all inputs
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
     setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+  }
+
+  async function handleFile(e) {
+    const chosen = e.target.files[0];
+    setError("");
+    setFile(null);
+    setForm((prev) => ({ ...prev, pages: 0 }));
+    if (!chosen) return;
+
+    if (chosen.size > 20 * 1024 * 1024) {
+      setError("File is too large (max 20 MB)");
+      e.target.value = "";
+      return;
+    }
+
+    setCounting(true);
+    try {
+      const { pages } = await countPages(chosen);
+      setFile(chosen);
+      setForm((prev) => ({ ...prev, pages }));
+    } catch (err) {
+      setError(err.message);
+      e.target.value = "";
+    } finally {
+      setCounting(false);
+    }
   }
 
   // Ask the server for the price whenever print options change
@@ -32,8 +58,7 @@ export default function OrderPage() {
       getQuote(form)
         .then((data) => !cancelled && setPrice(data.price))
         .catch(() => !cancelled && setPrice(0));
-    }, 300); // wait 300ms after typing stops
-
+    }, 300);
     return () => {
       cancelled = true;
       clearTimeout(timer);
@@ -45,9 +70,10 @@ export default function OrderPage() {
     setError("");
     setLoading(true);
     try {
-      const order = await placeOrder(form);
+      const order = await placeOrder(form, file);
       setPlaced(order);
       setForm(initialForm);
+      setFile(null);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -91,20 +117,16 @@ export default function OrderPage() {
       </label>
 
       <label>
-        File name (file upload coming soon)
-        <input name="fileName" value={form.fileName} onChange={handleChange} />
+        Your file (PDF, JPG or PNG, max 20 MB)
+        <input type="file" accept=".pdf,.jpg,.jpeg,.png" onChange={handleFile} required />
       </label>
+      {counting && <p>Reading your file...</p>}
+      {file && <p>Pages found: <strong>{form.pages}</strong></p>}
 
-      <div className="row">
-        <label>
-          Pages
-          <input type="number" min="1" name="pages" value={form.pages} onChange={handleChange} required />
-        </label>
-        <label>
-          Copies
-          <input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} required />
-        </label>
-      </div>
+      <label>
+        Copies
+        <input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} required />
+      </label>
 
       <label>
         Paper size
@@ -126,9 +148,11 @@ export default function OrderPage() {
 
       <div className="price">Estimated price: ₹{price}</div>
 
+      <p className="note">Your file is deleted after you collect your prints.</p>
+
       {error && <p className="error">{error}</p>}
 
-      <button type="submit" disabled={loading}>
+      <button type="submit" disabled={loading || counting || !file}>
         {loading ? "Placing order..." : "Place order"}
       </button>
     </form>

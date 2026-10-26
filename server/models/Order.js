@@ -9,6 +9,9 @@ const orderSchema = new mongoose.Schema(
     phone: { type: String, required: true, trim: true },
 
     fileName: { type: String, default: "" },
+    fileUrl: { type: String, default: "" },
+    filePublicId: { type: String, default: "" },
+    fileResourceType: { type: String, default: "" },
     pages: { type: Number, required: true, min: 1 },
     copies: { type: Number, required: true, min: 1, default: 1 },
     color: { type: Boolean, default: false },

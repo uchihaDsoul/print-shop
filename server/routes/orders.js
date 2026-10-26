@@ -2,48 +2,99 @@ const express = require("express");
 const crypto = require("crypto");
 const Order = require("../models/Order");
 const { calculatePrice } = require("../utils/pricing");
+const { saveFile, deleteFile } = require("../utils/storage");
+const { uploadOne } = require("../utils/upload");
+const { countPages } = require("../utils/pdf");
 
 const router = express.Router();
+
+const toBool = (v) => v === true || v === "true" || v === "on";
 
 function makeTrackingCode() {
   return crypto.randomBytes(3).toString("hex").toUpperCase();
 }
 
-async function createOrder(body, source) {
-  const { customerName, phone, fileName, pages, copies, color, size, doubleSided } = body;
+async function createOrder(body, source, file) {
+  const { customerName, phone } = body;
+
+  if (!/^[0-9]{10}$/.test(phone || "")) {
+    throw new Error("Phone number must be 10 digits");
+  }
+
+  let pages = Number(body.pages);
+  let fileData = { fileName: body.fileName || "" };
+
+  if (file) {
+    pages = await countPages(file); // server decides the page count
+    fileData = { ...(await saveFile(file.buffer)), fileName: file.originalname };
+  }
 
   const options = {
-    pages: Number(pages),
-    copies: Number(copies) || 1,
-    color: Boolean(color),
-    size: size === "A3" ? "A3" : "A4",
-    doubleSided: Boolean(doubleSided),
+    pages,
+    copies: Number(body.copies) || 1,
+    color: toBool(body.color),
+    size: body.size === "A3" ? "A3" : "A4",
+    doubleSided: toBool(body.doubleSided),
   };
 
   const price = calculatePrice(options);
 
-  return Order.create({
-    trackingCode: makeTrackingCode(),
-    source,
-    customerName,
-    phone,
-    fileName,
-    ...options,
-    price,
-  });
+  try {
+    return await Order.create({
+      trackingCode: makeTrackingCode(),
+      source,
+      customerName,
+      phone,
+      ...fileData,
+      ...options,
+      price,
+    });
+  } catch (err) {
+    // order failed: remove the file we just uploaded so it isn't left behind
+    if (fileData.filePublicId) {
+      deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(() => {});
+    }
+    throw err;
+  }
 }
 
-router.post("/online", async (req, res) => {
+// Price preview (saves nothing)
+router.post("/quote", (req, res) => {
+  const options = {
+    pages: Number(req.body.pages) || 0,
+    copies: Number(req.body.copies) || 1,
+    color: toBool(req.body.color),
+    size: req.body.size === "A3" ? "A3" : "A4",
+    doubleSided: toBool(req.body.doubleSided),
+  };
+  if (options.pages < 1 || options.copies < 1) return res.json({ price: 0 });
+  res.json({ price: calculatePrice(options) });
+});
+
+// Count pages of a chosen file (saves nothing)
+router.post("/pagecount", uploadOne, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "No file received" });
   try {
-    res.status(201).json(await createOrder(req.body, "online"));
+    res.json({ pages: await countPages(req.file) });
+  } catch (err) {
+    res.status(400).json({ error: "Could not read this file. It may be damaged." });
+  }
+});
+
+// Online order: file is required
+router.post("/online", uploadOne, async (req, res) => {
+  if (!req.file) return res.status(400).json({ error: "Please attach a file" });
+  try {
+    res.status(201).json(await createOrder(req.body, "online", req.file));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
-router.post("/walkin", async (req, res) => {
+// Walk-in order: file is optional (protect with login later)
+router.post("/walkin", uploadOne, async (req, res) => {
   try {
-    res.status(201).json(await createOrder(req.body, "walkin"));
+    res.status(201).json(await createOrder(req.body, "walkin", req.file));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -60,6 +111,7 @@ router.get("/track/:code", async (req, res) => {
   });
 });
 
+// Admin list (protect later)
 router.get("/", async (req, res) => {
   const filter = {};
   if (req.query.status) filter.status = req.query.status;
@@ -67,18 +119,31 @@ router.get("/", async (req, res) => {
   res.json(await Order.find(filter).sort({ createdAt: -1 }));
 });
 
+// Admin update (protect later). Deletes the file when order is collected.
 router.patch("/:id", async (req, res) => {
-  const { status, paid } = req.body;
-  const update = {};
-  if (status) update.status = status;
-  if (typeof paid === "boolean") update.paid = paid;
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
 
-  const order = await Order.findByIdAndUpdate(req.params.id, update, {
-    new: true,
-    runValidators: true,
-  });
-  if (!order) return res.status(404).json({ error: "Order not found" });
-  res.json(order);
+    if (req.body.status) order.status = req.body.status;
+    if (typeof req.body.paid === "boolean") order.paid = req.body.paid;
+
+    if (order.status === "collected" && order.filePublicId) {
+      try {
+        await deleteFile(order.filePublicId, order.fileResourceType);
+        order.fileUrl = "";
+        order.filePublicId = "";
+        order.fileResourceType = "";
+      } catch (e) {
+        console.error("File delete failed:", e.message);
+      }
+    }
+
+    await order.save();
+    res.json(order);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
 });
 
 module.exports = router;

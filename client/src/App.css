@@ -55,3 +55,4 @@ button:disabled { background: #94a3b8; cursor: not-allowed; }
 .badge.printing { background: #2563eb; }
 .badge.ready { background: #16a34a; }
 .badge.collected { background: #64748b; }
+.note { font-size: 0.85rem; color: #666; margin: 0; }
