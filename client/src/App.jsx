@@ -13,6 +13,11 @@ export default function App() {
 
   return (
     <div className="app">
+            <div className="bg" aria-hidden="true">
+        <span className="blob b1" />
+        <span className="blob b2" />
+        <span className="blob b3" />
+      </div>
       <header className="topbar">
         <div className="topbar-inner">
           <Link to="/" className="brand">
