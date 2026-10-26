@@ -8,7 +8,16 @@ const mongoose = require("mongoose");
 
 const app = express();
 app.set("trust proxy", 1);
-app.use(cors());
+const allowed = (process.env.CLIENT_URL || "http://localhost:5173")
+  .split(",")
+  .map((s) => s.trim());
+
+app.use(
+  cors({
+    origin: (origin, cb) =>
+      !origin || allowed.includes(origin) ? cb(null, true) : cb(new Error("Not allowed by CORS")),
+  })
+);
 app.use(express.json());
 
 app.get("/api/health", (req, res) => {

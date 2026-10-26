@@ -9,12 +9,25 @@ const { requireAuth, requireRole } = require("../middleware/auth");
 const staff = [requireAuth, requireRole("manager", "admin", "superadmin")];
 const boss = [requireAuth, requireRole("admin", "superadmin")];
 
+const rateLimit = require("express-rate-limit");
+
+const orderLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  message: { error: "Too many requests. Please try again later." },
+});
+const trackLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: { error: "Too many requests. Please try again later." },
+});
+
 const router = express.Router();
 
 const toBool = (v) => v === true || v === "true" || v === "on";
 
 function makeTrackingCode() {
-    return crypto.randomBytes(3).toString("hex").toUpperCase();
+    return crypto.randomBytes(5).toString("hex").toUpperCase(); //10 characters
 }
 
 async function createOrder(body, source, file) {
@@ -75,7 +88,7 @@ router.post("/quote", (req, res) => {
 });
 
 // Count pages of a chosen file (saves nothing)
-router.post("/pagecount", uploadOne, async (req, res) => {
+router.post("/pagecount", orderLimiter, uploadOne, async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "No file received" });
     try {
         res.json({ pages: await countPages(req.file) });
@@ -85,7 +98,7 @@ router.post("/pagecount", uploadOne, async (req, res) => {
 });
 
 // Online order: file is required
-router.post("/online", uploadOne, async (req, res) => {
+router.post("/online", orderLimiter, uploadOne, async (req, res) => {
     if (!req.file) return res.status(400).json({ error: "Please attach a file" });
     try {
         res.status(201).json(await createOrder(req.body, "online", req.file));
@@ -103,7 +116,7 @@ router.post("/walkin", ...staff, uploadOne, async (req, res) => {
     }
 });
 
-router.get("/track/:code", async (req, res) => {
+router.get("/track/:code", trackLimiter, async (req, res) => {
     const order = await Order.findOne({ trackingCode: req.params.code.toUpperCase() });
     if (!order) return res.status(404).json({ error: "Order not found" });
     res.json({
@@ -151,8 +164,12 @@ router.patch("/:id", ...staff, async (req, res) => {
 
 // Today's totals, split by online and walk-in (admin and super admin only)
 router.get("/stats", ...boss, async (req, res) => {
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
+    // midnight today in India time (IST = UTC+5:30, no daylight saving)
+    const IST = 5.5 * 60 * 60 * 1000;
+    const nowIST = new Date(Date.now() + IST);
+    nowIST.setUTCHours(0, 0, 0, 0);
+    const start = new Date(nowIST.getTime() - IST);
+
     const rows = await Order.aggregate([
         { $match: { createdAt: { $gte: start } } },
         {
