@@ -155,7 +155,7 @@ export default function OrderPage() {
         {file && !rangeError && (
           <p className="note">Printing <strong>{printPages}</strong> of {form.pages} page(s)</p>
         )}
-        
+
         <h3>3. Print options</h3>
         <div className="row">
           <label>
@@ -188,7 +188,7 @@ export default function OrderPage() {
         <p className="note">🔒 Your file is deleted after you collect your prints.</p>
         {error && <p className="error">{error}</p>}
 
-        <button type="submit" disabled={loading || counting || !file}>
+        <button type="submit" disabled={loading || counting || !file || Boolean(rangeError)}>
           {loading ? "Placing order..." : "Place order"}
         </button>
       </form>
