@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const Order = require("../models/Order");
 const { calculatePrice, RATES, DOUBLE_SIDED_FACTOR } = require("../utils/pricing");
-const { saveFile, deleteFile } = require("../utils/storage");
+const { saveFile, getTempUrl, deleteFile } = require("../utils/storage");
 const { uploadOne } = require("../utils/upload");
 const { countPages } = require("../utils/pdf");
 const { requireAuth, requireRole } = require("../middleware/auth");
@@ -141,6 +141,17 @@ router.get("/", ...staff, async (req, res) => {
     if (req.query.status) filter.status = req.query.status;
     if (req.query.source) filter.source = req.query.source;
     res.json(await Order.find(filter).sort({ createdAt: -1 }));
+});
+
+// Staff only: get a temporary link to the order's file
+router.get("/:id/file", ...staff, async (req, res) => {
+  const order = await Order.findById(req.params.id);
+  if (!order || !order.filePublicId) {
+    return res.status(404).json({ error: "No file for this order" });
+  }
+  res.json({
+    url: getTempUrl(order.filePublicId, order.fileResourceType, order.fileFormat),
+  });
 });
 
 // Admin update (protect later). Deletes the file when order is collected.

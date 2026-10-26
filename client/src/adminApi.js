@@ -35,3 +35,4 @@ export const listUsers = () => call("/users");
 export const createUser = (data) => call("/users", body("POST", data));
 export const updateUser = (id, data) => call(`/users/${id}`, body("PATCH", data));
 export const deleteUser = (id) => call(`/users/${id}`, { method: "DELETE" });
+export const getFileLink = (id) => call(`/orders/${id}/file`);

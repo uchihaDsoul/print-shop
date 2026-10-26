@@ -12,6 +12,7 @@ const orderSchema = new mongoose.Schema(
     fileUrl: { type: String, default: "" },
     filePublicId: { type: String, default: "" },
     fileResourceType: { type: String, default: "" },
+    fileFormat: { type: String, default: "" },
     pages: { type: Number, required: true, min: 1 },
     copies: { type: Number, required: true, min: 1, default: 1 },
     color: { type: Boolean, default: false },

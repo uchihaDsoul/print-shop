@@ -6,17 +6,18 @@ cloudinary.config({
   api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// Upload a file held in memory. Returns the info we store in MongoDB.
+// Upload privately. Returns the info we store in MongoDB.
 function saveFile(buffer) {
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream(
-      { folder: "printshop", resource_type: "auto" },
+      { folder: "printshop", resource_type: "auto", type: "private" },
       (err, result) => {
         if (err) return reject(err);
         resolve({
-          fileUrl: result.secure_url,
+          fileUrl: "", // no public link is stored any more
           filePublicId: result.public_id,
           fileResourceType: result.resource_type,
+          fileFormat: result.format || "",
         });
       }
     );
@@ -24,10 +25,21 @@ function saveFile(buffer) {
   });
 }
 
-async function deleteFile(publicId, resourceType) {
-  await cloudinary.uploader.destroy(publicId, {
+// Short-lived download link (expires in 2 minutes)
+function getTempUrl(publicId, resourceType, format) {
+  const expires = Math.floor(Date.now() / 1000) + 120;
+  return cloudinary.utils.private_download_url(publicId, format || "", {
     resource_type: resourceType || "image",
+    type: "private",
+    expires_at: expires,
   });
 }
 
-module.exports = { saveFile, deleteFile };
+async function deleteFile(publicId, resourceType) {
+  await cloudinary.uploader.destroy(publicId, {
+    resource_type: resourceType || "image",
+    type: "private",
+  });
+}
+
+module.exports = { saveFile, getTempUrl, deleteFile };
