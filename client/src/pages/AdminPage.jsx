@@ -76,6 +76,15 @@ export default function AdminPage() {
     }
   }
 
+  async function openFile(id) {
+    try {
+      const { url } = await getFileLink(id);
+      window.open(url, "_blank", "noopener");
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function remove(id) {
     if (!window.confirm("Delete this order permanently?")) return;
     try {
@@ -105,7 +114,7 @@ export default function AdminPage() {
 
       {error && <p className="error">{error}</p>}
 
-            {isBoss && (
+      {isBoss && (
         <div className="card">
           <h2>Today</h2>
           {stats.length === 0 && <p className="note">No orders yet today.</p>}
@@ -169,7 +178,7 @@ export default function AdminPage() {
             </div>
             <div>₹{o.price} · {o.paid ? "Paid" : "Not paid"} · {new Date(o.createdAt).toLocaleString()}</div>
             <div className="actions">
-              {o.fileUrl && <a href={o.fileUrl} target="_blank" rel="noreferrer">Open file</a>}
+              {o.filePublicId && <button className="small ghost" onClick={() => openFile(o._id)}>Open file</button>}
               <select value={o.status} onChange={(e) => change(o._id, { status: e.target.value })}>
                 {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
               </select>
