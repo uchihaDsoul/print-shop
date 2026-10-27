@@ -1,20 +1,29 @@
 import { useEffect, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Link, Outlet } from "react-router-dom";
 import { useAuth } from "../../AuthContext";
 import { listOrders } from "../../adminApi";
+import Icon from "../../components/Icon";
+import { initials } from "../../format";
+import { SHOP } from "../../shopConfig";
+
+const ALL = ["manager", "admin", "superadmin"];
+const BOSS = ["admin", "superadmin"];
 
 const TABS = [
-  { to: "orders", label: "Orders", icon: "📋", roles: ["manager", "admin", "superadmin"], badge: true },
-  { to: "walkin", label: "Walk-in", icon: "➕", roles: ["manager", "admin", "superadmin"] },
-  { to: "reports", label: "Reports", icon: "📊", roles: ["admin", "superadmin"] },
-  { to: "users", label: "Users", icon: "👥", roles: ["admin", "superadmin"] },
+  { to: "dashboard", label: "Dashboard", icon: "dashboard", roles: BOSS },
+  { to: "orders", label: "Orders", icon: "orders", roles: ALL, badge: true },
+  { to: "walkin", label: "Walk-in order", icon: "plus", roles: ALL },
+  { to: "customers", label: "Customers", icon: "customers", roles: BOSS },
+  { to: "pricing", label: "Pricing", icon: "pricing", roles: BOSS },
+  { to: "users", label: "Staff", icon: "staff", roles: BOSS },
 ];
+
+const ROLE_LABEL = { superadmin: "Super admin", admin: "Admin", manager: "Store manager" };
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
   const [pending, setPending] = useState(0);
 
-  // pending-orders badge, refreshed every 30 seconds
   useEffect(() => {
     let alive = true;
     async function check() {
@@ -22,7 +31,7 @@ export default function AdminLayout() {
         const list = await listOrders("?status=pending");
         if (alive) setPending(list.length);
       } catch {
-        /* ignore, the pages show their own errors */
+        /* the pages show their own errors */
       }
     }
     check();
@@ -34,28 +43,43 @@ export default function AdminLayout() {
   }, []);
 
   return (
-    <>
-      <nav className="adminnav">
-        <div className="adminnav-links">
+    <div className="shell">
+      <aside className="sidebar">
+        <Link to="/admin" className="brand">
+          <span className="brand-logo"><Icon name="printer" size={22} /></span>
+          <span>
+            {SHOP.name}
+            <small className="brand-sub">Admin</small>
+          </span>
+        </Link>
+
+        <nav className="side-nav">
           {TABS.filter((t) => t.roles.includes(user.role)).map((t) => (
-            <NavLink key={t.to} to={t.to} className="adminnav-link">
-              <span aria-hidden="true">{t.icon}</span>
+            <NavLink key={t.to} to={t.to} className="side">
+              <Icon name={t.icon} />
               {t.label}
               {t.badge && pending > 0 && <span className="count">{pending}</span>}
             </NavLink>
           ))}
-        </div>
-        <div className="adminnav-user">
-          <span className="who">
-            {user.name} <small>({user.role})</small>
-          </span>
+        </nav>
+
+        <div className="side-foot">
+          <div className="me">
+            <span className="av">{initials(user.name)}</span>
+            <span>
+              <strong>{user.name}</strong>
+              <small>{ROLE_LABEL[user.role] || user.role}</small>
+            </span>
+          </div>
           <button className="small ghost" onClick={logout}>
-            Log out
+            <Icon name="logout" size={16} /> Log out
           </button>
         </div>
-      </nav>
+      </aside>
 
-      <Outlet />
-    </>
+      <main className="main">
+        <Outlet />
+      </main>
+    </div>
   );
 }
