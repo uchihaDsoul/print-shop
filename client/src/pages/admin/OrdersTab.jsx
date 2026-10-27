@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../AuthContext";
 import { listOrders, updateOrder, deleteOrder, getFileLink } from "../../adminApi";
+import Icon from "../../components/Icon";
+import { rupees, shortDate } from "../../format";
 
 const STATUSES = ["pending", "printing", "ready", "collected"];
 
@@ -73,29 +75,32 @@ export default function OrdersTab() {
   );
 
   return (
-    <div className="card">
-      <h2>Orders</h2>
+    <>
+      <header className="page-head">
+        <h1>Orders</h1>
+        <span className="date">{sorted.length} shown</span>
+      </header>
 
-      <div className="row">
-        <label>
-          Search
+      <div className="toolbar">
+        <div className="search">
+          <Icon name="search" size={18} />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Code, name or phone"
+            placeholder="Search code, name or phone"
           />
-        </label>
-        <label>
-          Status
-          <select value={filter} onChange={(e) => setFilter(e.target.value)}>
-            <option value="">All</option>
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
+        </div>
+        <div className="chips">
+          {["", ...STATUSES].map((s) => (
+            <button
+              key={s || "all"}
+              className={"chip" + (filter === s ? " on" : "")}
+              onClick={() => setFilter(s)}
+            >
+              {s || "all"}
+            </button>
+          ))}
+        </div>
       </div>
 
       {error && <p className="error">{error}</p>}
@@ -104,17 +109,19 @@ export default function OrdersTab() {
       <div className="orders-grid">
         {sorted.map((o) => (
           <div className="order" key={o._id}>
-            <div>
-              <strong>{o.trackingCode}</strong>{" "}
-              <span className={`tag ${o.source}`}>{o.source}</span>{" "}
-              <span className={`badge ${o.status}`}>{o.status}</span>
+            <div className="order-top">
+              <strong>{o.trackingCode}</strong>
+              <span>
+                <span className={`tag ${o.source}`}>{o.source}</span>{" "}
+                <span className={`badge ${o.status}`}>{o.status}</span>
+              </span>
             </div>
 
             <div>
-              {o.customerName} · {o.phone}
+              <strong>{o.customerName}</strong> <span className="note">{o.phone}</span>
             </div>
 
-            <div>
+            <div className="note">
               {o.printPages || o.pages} of {o.pages} pages
               {o.pageRange ? ` (${o.pageRange})` : ""} × {o.copies} · {o.size} ·{" "}
               {o.color ? "Color" : "B/W"} · {o.doubleSided ? "Double" : "Single"}-sided
@@ -130,9 +137,11 @@ export default function OrdersTab() {
 
             {o.note && <div className="order-note">📝 {o.note}</div>}
 
-            <div>
-              ₹{o.price} · {o.paid ? "Paid" : "Not paid"} ·{" "}
-              {new Date(o.createdAt).toLocaleString()}
+            <div className="order-total">
+              <strong>{rupees(o.price)}</strong>
+              <span className="note">
+                {o.paid ? "Paid" : "Not paid"} · {shortDate(o.createdAt)}
+              </span>
             </div>
 
             <div className="actions">
@@ -160,6 +169,6 @@ export default function OrdersTab() {
           </div>
         ))}
       </div>
-    </div>
+    </>
   );
 }
