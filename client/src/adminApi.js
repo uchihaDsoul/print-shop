@@ -17,11 +17,13 @@ async function call(path, options = {}, isForm = false) {
 
 const body = (method, data) => ({ method, body: JSON.stringify(data) });
 
-export const login = (username, password) => call("/auth/login", body("POST", { username, password }));
+export const login = (username, password) =>
+  call("/auth/login", body("POST", { username, password }));
 export const getMe = () => call("/auth/me");
 
 export const listOrders = (query = "") => call(`/orders${query}`);
-export const updateOrder = (id, data) => call(`/orders/${id}`, body("PATCH", data));
+export const updateOrder = (id, data) =>
+  call(`/orders/${id}`, body("PATCH", data));
 export const deleteOrder = (id) => call(`/orders/${id}`, { method: "DELETE" });
 export const getStats = () => call("/orders/stats");
 export const createWalkin = (form, file) => {
@@ -33,6 +35,9 @@ export const createWalkin = (form, file) => {
 
 export const listUsers = () => call("/users");
 export const createUser = (data) => call("/users", body("POST", data));
-export const updateUser = (id, data) => call(`/users/${id}`, body("PATCH", data));
+export const updateUser = (id, data) =>
+  call(`/users/${id}`, body("PATCH", data));
 export const deleteUser = (id) => call(`/users/${id}`, { method: "DELETE" });
 export const getFileLink = (id) => call(`/orders/${id}/file`);
+export const updatePricing = (data) =>
+  call("/setting/pricing", body("PUT", data));
