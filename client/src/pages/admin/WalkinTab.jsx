@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { createWalkin } from "../../adminApi";
 import { getQuote, countPages } from "../../api";
+import useRates from "../../useRates";
 
 const blank = {
   customerName: "",
@@ -28,6 +29,8 @@ export default function WalkinTab() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(null);
+  const rates = useRates();
+  const sizes = rates?.enabledSizes || ["A4"];
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -107,14 +110,20 @@ export default function WalkinTab() {
 
       {done && (
         <p className="success-msg">
-          ✓ Order added. Code <strong>{done.trackingCode}</strong> · ₹{done.price}
+          ✓ Order added. Code <strong>{done.trackingCode}</strong> · ₹
+          {done.price}
         </p>
       )}
 
       <div className="row">
         <label>
           Name
-          <input name="customerName" value={form.customerName} onChange={handleChange} required />
+          <input
+            name="customerName"
+            value={form.customerName}
+            onChange={handleChange}
+            required
+          />
         </label>
         <label>
           Phone
@@ -160,15 +169,26 @@ export default function WalkinTab() {
         </label>
         <label>
           Copies
-          <input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} />
+          <input
+            type="number"
+            min="1"
+            name="copies"
+            value={form.copies}
+            onChange={handleChange}
+          />
         </label>
-        <label>
-          Size
-          <select name="size" value={form.size} onChange={handleChange}>
-            <option>A4</option>
-            <option>A3</option>
-          </select>
-        </label>
+        {sizes.length > 1 && (
+          <label>
+            Size
+            <select name="size" value={form.size} onChange={handleChange}>
+              {sizes.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <label>
@@ -189,33 +209,63 @@ export default function WalkinTab() {
 
       <div className="row">
         <label className="check">
-          <input type="checkbox" name="color" checked={form.color} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="color"
+            checked={form.color}
+            onChange={handleChange}
+          />
           Color
         </label>
         <label className="check">
-          <input type="checkbox" name="doubleSided" checked={form.doubleSided} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="doubleSided"
+            checked={form.doubleSided}
+            onChange={handleChange}
+          />
           Double-sided
         </label>
       </div>
 
       <div className="row">
         <label className="check">
-          <input type="checkbox" name="stapling" checked={form.stapling} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="stapling"
+            checked={form.stapling}
+            onChange={handleChange}
+          />
           Stapling
         </label>
         <label className="check">
-          <input type="checkbox" name="binding" checked={form.binding} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="binding"
+            checked={form.binding}
+            onChange={handleChange}
+          />
           Binding
         </label>
         <label className="check">
-          <input type="checkbox" name="urgent" checked={form.urgent} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="urgent"
+            checked={form.urgent}
+            onChange={handleChange}
+          />
           Urgent
         </label>
       </div>
 
       <label>
         Note (optional)
-        <input name="note" value={form.note} onChange={handleChange} maxLength={300} />
+        <input
+          name="note"
+          value={form.note}
+          onChange={handleChange}
+          maxLength={300}
+        />
       </label>
 
       <div className="price">
@@ -225,7 +275,10 @@ export default function WalkinTab() {
 
       {error && <p className="error">{error}</p>}
 
-      <button type="submit" disabled={saving || counting || Boolean(rangeError)}>
+      <button
+        type="submit"
+        disabled={saving || counting || Boolean(rangeError)}
+      >
         {saving ? "Saving..." : "Add order"}
       </button>
     </form>

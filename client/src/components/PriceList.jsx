@@ -5,7 +5,9 @@ export default function PriceList() {
   const [data, setData] = useState(null);
 
   useEffect(() => {
-    getRates().then(setData).catch(() => {});
+    getRates()
+      .then(setData)
+      .catch(() => {});
   }, []);
 
   if (!data) return null;
@@ -22,26 +24,33 @@ export default function PriceList() {
           </tr>
         </thead>
         <tbody>
-          {Object.entries(data.rates).map(([size, r]) => (
-            <tr key={size}>
-              <td>{size}</td>
-              <td>₹{r.bw} / page</td>
-              <td>₹{r.color} / page</td>
-            </tr>
-          ))}
+          {Object.entries(data.rates)
+            .filter(([size]) => (data.enabledSizes || ["A4"]).includes(size))
+            .map(([size, r]) => (
+              <tr key={size}>
+                <td>{size}</td>
+                <td>₹{r.bw} / page</td>
+                <td>₹{r.color} / page</td>
+              </tr>
+            ))}
         </tbody>
       </table>
       {data.doubleSidedDiscountPercent > 0 && (
-        <p className="note">Double-sided printing: {data.doubleSidedDiscountPercent}% off.</p>
+        <p className="note">
+          Double-sided printing: {data.doubleSidedDiscountPercent}% off.
+        </p>
       )}
 
-            {data.extras && (
+      {data.extras && (
         <>
           <h3>Extras</h3>
           <p className="note">
-            Stapling: {data.extras.stapling ? `₹${data.extras.stapling} per copy` : "free"} ·
-            Spiral binding: ₹{data.extras.binding} per copy ·
-            Urgent: ₹{data.extras.urgent} per order
+            Stapling:{" "}
+            {data.extras.stapling
+              ? `₹${data.extras.stapling} per copy`
+              : "free"}{" "}
+            · Spiral binding: ₹{data.extras.binding} per copy · Urgent: ₹
+            {data.extras.urgent} per order
           </p>
         </>
       )}
