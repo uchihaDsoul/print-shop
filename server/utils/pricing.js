@@ -1,6 +1,9 @@
 const Setting = require("../models/Setting");
 
+const ALL_SIZES = ["A4", "A3"];
+
 const DEFAULTS = {
+  enabledSizes: ["A4"],
   rates: {
     A4: { bw: 2, color: 10 },
     A3: { bw: 5, color: 20 },
@@ -29,7 +32,17 @@ function num(value, label, max = 100000) {
 function validatePricing(input) {
   const r = (input && input.rates) || {};
   const e = (input && input.extras) || {};
+
+  // older saved prices have no enabledSizes, so fall back to the default
+  const wanted = Array.isArray(input && input.enabledSizes)
+    ? input.enabledSizes
+    : DEFAULTS.enabledSizes;
+  const enabledSizes = ALL_SIZES.filter((s) => wanted.includes(s));
+  if (enabledSizes.length === 0)
+    throw new Error("Enable at least one paper size");
+
   return {
+    enabledSizes,
     rates: {
       A4: {
         bw: num(r.A4 && r.A4.bw, "A4 black and white rate"),
@@ -87,6 +100,12 @@ async function savePricing(input, username) {
 
 const getPricing = () => current;
 
+// Returns the size if it is enabled, otherwise the first enabled size
+function pickSize(value) {
+  const { enabledSizes } = current;
+  return enabledSizes.includes(value) ? value : enabledSizes[0];
+}
+
 function calculatePrice({
   pages,
   copies,
@@ -98,7 +117,8 @@ function calculatePrice({
   urgent,
 }) {
   const { rates, doubleSidedDiscountPercent, extras } = current;
-  const perPage = rates[size][color ? "color" : "bw"];
+  const sizeRates = rates[size] || rates.A4;
+  const perPage = sizeRates[color ? "color" : "bw"];
   const factor = doubleSided ? 1 - doubleSidedDiscountPercent / 100 : 1;
   let total = pages * copies * perPage * factor;
 
@@ -110,4 +130,10 @@ function calculatePrice({
   return Math.round(total);
 }
 
-module.exports = { calculatePrice, getPricing, loadPricing, savePricing };
+module.exports = {
+  calculatePrice,
+  getPricing,
+  loadPricing,
+  savePricing,
+  pickSize,
+};

@@ -1,7 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const Order = require("../models/Order");
-const { calculatePrice, getPricing } = require("../utils/pricing");
+const { calculatePrice, getPricing, pickSize } = require("../utils/pricing");
 const { saveFile, getTempUrl, deleteFile } = require("../utils/storage");
 const { uploadOne } = require("../utils/upload");
 const { countPages } = require("../utils/pdf");
@@ -53,7 +53,7 @@ async function createOrder(body, source, file) {
     const printOptions = {
       copies: Number(body.copies) || 1,
       color: toBool(body.color),
-      size: body.size === "A3" ? "A3" : "A4",
+      size: pickSize(body.size),
       doubleSided: toBool(body.doubleSided),
       stapling: toBool(body.stapling),
       binding: toBool(body.binding),
@@ -100,7 +100,7 @@ router.post("/quote", (req, res) => {
       pages: range.count,
       copies,
       color: toBool(req.body.color),
-      size: req.body.size === "A3" ? "A3" : "A4",
+      size: pickSize(req.body.size),
       doubleSided: toBool(req.body.doubleSided),
       stapling: toBool(req.body.stapling),
       binding: toBool(req.body.binding),

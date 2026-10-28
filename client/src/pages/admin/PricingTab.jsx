@@ -3,12 +3,13 @@ import { getRates } from "../../api";
 import { updatePricing } from "../../adminApi";
 import { rupees } from "../../format";
 
-// turn the server data into flat text fields for the form
+// turn the server data into flat form fields
 const toForm = (d) => ({
   A4bw: String(d.rates.A4.bw),
   A4color: String(d.rates.A4.color),
   A3bw: String(d.rates.A3.bw),
   A3color: String(d.rates.A3.color),
+  a3: (d.enabledSizes || []).includes("A3"),
   discount: String(d.doubleSidedDiscountPercent),
   stapling: String(d.extras.stapling),
   binding: String(d.extras.binding),
@@ -17,6 +18,7 @@ const toForm = (d) => ({
 
 // and back into the shape the server expects
 const toPayload = (f) => ({
+  enabledSizes: f.a3 ? ["A4", "A3"] : ["A4"],
   rates: {
     A4: { bw: f.A4bw, color: f.A4color },
     A3: { bw: f.A3bw, color: f.A3color },
@@ -114,11 +116,25 @@ export default function PricingTab() {
           {field("A4color", "Color")}
         </div>
 
-        <h3>A3 paper (₹ per page)</h3>
-        <div className="row">
-          {field("A3bw", "Black and white")}
-          {field("A3color", "Color")}
-        </div>
+        <h3>Paper sizes</h3>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={form.a3}
+            onChange={(e) => set("a3", e.target.checked)}
+          />
+          Offer A3 paper (only if you have an A3 printer)
+        </label>
+
+        {form.a3 && (
+          <>
+            <h3>A3 paper (₹ per page)</h3>
+            <div className="row">
+              {field("A3bw", "Black and white")}
+              {field("A3color", "Color")}
+            </div>
+          </>
+        )}
 
         <h3>Discount</h3>
         <div className="row">
@@ -165,7 +181,7 @@ export default function PricingTab() {
 
         <p className="note">
           Changing prices doesn't affect orders that already exist. Use 0 for a
-          free extra.
+          free extra. A3 rates stay saved while A3 is switched off.
         </p>
       </form>
     </>
