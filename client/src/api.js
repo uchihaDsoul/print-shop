@@ -30,3 +30,15 @@ export const placeOrder = (form, file) => {
 
 export const trackOrder = (code) => request(`/track/${encodeURIComponent(code)}`);
 export const getRates = () => request("/rates");
+
+export const getPublicSettings = () =>
+  fetch(`${API}/api/settings/public`).then((r) => r.json());
+
+export const submitUpi = (code, reference) =>
+  request(`/track/${encodeURIComponent(code)}/upi`, json("POST", { reference }));
+
+export const chooseCash = (code) =>
+  request(`/track/${encodeURIComponent(code)}/cash`, json("POST", {}));
+
+export const atCounter = (code) =>
+  request(`/track/${encodeURIComponent(code)}/counter`, json("POST", {}));

@@ -649,3 +649,22 @@ a.btn.ghost-link {
 .badge.print_failed { color: #fff; background: var(--danger); border-color: transparent; }
 .badge.rejected { color: var(--danger); }
 .badge.cancelled { color: var(--muted); }
+
+/* ---------- Payment panel ---------- */
+.pay {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.method { display: flex; gap: 8px; flex-wrap: wrap; }
+.qr {
+  align-self: center;
+  padding: 14px;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
+}

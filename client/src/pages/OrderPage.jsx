@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { getQuote, placeOrder, countPages } from "../api";
 import useRates from "../useRates";
+import PaymentPanel from "../components/PaymentPanel";
 
 const initialForm = {
   customerName: "",
@@ -113,17 +114,18 @@ export default function OrderPage() {
 
   if (placed) {
     return (
-      <div className="page-narrow">
-        <div className="card success">
-          <div className="tick">✓</div>
-          <h2>Order placed</h2>
-          <p className="note">Save this code to track your order:</p>
-          <p className="code">{placed.trackingCode}</p>
-          <p>
-            Total: <strong>₹{placed.price}</strong> (pay at the shop)
-          </p>
-          <button onClick={() => setPlaced(null)}>Place another order</button>
-        </div>
+      <div className="card success">
+        <div className="tick">✓</div>
+        <h2>Order placed!</h2>
+        <p className="note">Save this code to track your order:</p>
+        <p className="code">{placed.trackingCode}</p>
+        <p>
+          Total: <strong>₹{placed.price}</strong>
+        </p>
+        <PaymentPanel order={placed} onUpdate={setPlaced} />
+        <button className="ghost" onClick={() => setPlaced(null)}>
+          Place another order
+        </button>
       </div>
     );
   }

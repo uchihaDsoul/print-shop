@@ -1,9 +1,19 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../AuthContext";
-import { listOrders, updateOrder, deleteOrder, getFileLink } from "../../adminApi";
+import {
+  listOrders,
+  updateOrder,
+  deleteOrder,
+  getFileLink,
+} from "../../adminApi";
 import Icon from "../../components/Icon";
 import { rupees, shortDate } from "../../format";
-import { ALL_STATUSES, FILTERS, SORT_ORDER, statusLabel } from "../../statusMeta";
+import {
+  ALL_STATUSES,
+  FILTERS,
+  SORT_ORDER,
+  statusLabel,
+} from "../../statusMeta";
 
 export default function OrdersTab() {
   const { user } = useAuth();
@@ -40,12 +50,17 @@ export default function OrdersTab() {
 
   function changeStatus(order, value) {
     if (value === "rejected") {
-      const reason = window.prompt("Reason for rejecting (the customer will see this):");
+      const reason = window.prompt(
+        "Reason for rejecting (the customer will see this):",
+      );
       if (reason === null) return;
       change(order._id, { status: value, rejectReason: reason });
       return;
     }
-    if (value === "cancelled" && !window.confirm("Cancel this order? Its file will be deleted.")) {
+    if (
+      value === "cancelled" &&
+      !window.confirm("Cancel this order? Its file will be deleted.")
+    ) {
       return;
     }
     change(order._id, { status: value });
@@ -76,7 +91,7 @@ export default function OrdersTab() {
       !q ||
       o.trackingCode.toLowerCase().includes(q) ||
       o.customerName.toLowerCase().includes(q) ||
-      o.phone.includes(q)
+      o.phone.includes(q),
   );
 
   // needs attention first, urgent first, then oldest first
@@ -84,7 +99,7 @@ export default function OrdersTab() {
     (a, b) =>
       SORT_ORDER.indexOf(a.status) - SORT_ORDER.indexOf(b.status) ||
       Number(b.urgent) - Number(a.urgent) ||
-      new Date(a.createdAt) - new Date(b.createdAt)
+      new Date(a.createdAt) - new Date(b.createdAt),
   );
 
   return (
@@ -126,18 +141,22 @@ export default function OrdersTab() {
               <strong>{o.trackingCode}</strong>
               <span>
                 <span className={`tag ${o.source}`}>{o.source}</span>{" "}
-                <span className={`badge ${o.status}`}>{statusLabel(o.status)}</span>
+                <span className={`badge ${o.status}`}>
+                  {statusLabel(o.status)}
+                </span>
               </span>
             </div>
 
             <div>
-              <strong>{o.customerName}</strong> <span className="note">{o.phone}</span>
+              <strong>{o.customerName}</strong>{" "}
+              <span className="note">{o.phone}</span>
             </div>
 
             <div className="note">
               {o.printPages || o.pages} of {o.pages} pages
               {o.pageRange ? ` (${o.pageRange})` : ""} × {o.copies} · {o.size} ·{" "}
-              {o.color ? "Color" : "B/W"} · {o.doubleSided ? "Double" : "Single"}-sided
+              {o.color ? "Color" : "B/W"} ·{" "}
+              {o.doubleSided ? "Double" : "Single"}-sided
             </div>
 
             {(o.stapling || o.binding || o.urgent) && (
@@ -151,6 +170,17 @@ export default function OrdersTab() {
             {o.note && <div className="order-note">📝 {o.note}</div>}
             {o.status === "rejected" && o.rejectReason && (
               <div className="order-note">Rejected: {o.rejectReason}</div>
+            )}
+            {o.upiReference && (
+              <div className="order-note">
+                UPI reference: <strong>{o.upiReference}</strong> · check ₹
+                {o.price} in your UPI app
+              </div>
+            )}
+            {o.atCounterAt && !o.paid && (
+              <div>
+                <span className="tag urgent">AT COUNTER</span>
+              </div>
             )}
 
             <div className="order-total">
@@ -172,7 +202,10 @@ export default function OrdersTab() {
                 </button>
               )}
 
-              <select value={o.status} onChange={(e) => changeStatus(o, e.target.value)}>
+              <select
+                value={o.status}
+                onChange={(e) => changeStatus(o, e.target.value)}
+              >
                 {ALL_STATUSES.map((s) => (
                   <option key={s} value={s}>
                     {statusLabel(s)}
@@ -181,20 +214,27 @@ export default function OrdersTab() {
               </select>
 
               {o.paid ? (
-                <button className="small ghost" onClick={() => change(o._id, { paid: false })}>
+                <button
+                  className="small ghost"
+                  onClick={() => change(o._id, { paid: false })}
+                >
                   Mark unpaid
                 </button>
               ) : (
                 <>
                   <button
                     className="small"
-                    onClick={() => change(o._id, { paid: true, paymentMethod: "cash" })}
+                    onClick={() =>
+                      change(o._id, { paid: true, paymentMethod: "cash" })
+                    }
                   >
                     Cash paid
                   </button>
                   <button
                     className="small"
-                    onClick={() => change(o._id, { paid: true, paymentMethod: "upi" })}
+                    onClick={() =>
+                      change(o._id, { paid: true, paymentMethod: "upi" })
+                    }
                   >
                     UPI paid
                   </button>

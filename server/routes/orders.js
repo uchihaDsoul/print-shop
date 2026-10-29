@@ -47,6 +47,54 @@ async function removeOrderFile(order) {
   }
 }
 
+// The only order fields a customer is allowed to see
+function publicOrder(o) {
+  return {
+    trackingCode: o.trackingCode,
+    source: o.source,
+    status: o.status,
+    price: o.price,
+    paid: o.paid,
+    paymentMethod: o.paymentMethod,
+    rejectReason: o.rejectReason,
+    atCounter: Boolean(o.atCounterAt),
+    upiSubmitted: Boolean(o.upiReference),
+    expiresAt: o.expiresAt || null,
+  };
+}
+
+const payLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: { error: "Too many attempts. Please try again later." },
+});
+
+// Finds an online order that is still waiting for payment
+async function findPayable(req, res) {
+  const order = await Order.findOne({
+    trackingCode: String(req.params.code).toUpperCase(),
+  });
+  if (!order) {
+    res.status(404).json({ error: "Order not found" });
+    return null;
+  }
+  if (order.source !== "online") {
+    res.status(400).json({ error: "Please pay at the counter for this order" });
+    return null;
+  }
+  if (!["awaiting_payment", "awaiting_confirmation"].includes(order.status)) {
+    res.status(400).json({ error: "This order isn't waiting for payment" });
+    return null;
+  }
+  if (order.expiresAt && order.expiresAt < new Date()) {
+    res
+      .status(400)
+      .json({ error: "This order has expired. Please place a new order." });
+    return null;
+  }
+  return order;
+}
+
 async function createOrder(body, source, file, staffUser) {
   const { customerName, phone } = body;
 
@@ -59,7 +107,10 @@ async function createOrder(body, source, file, staffUser) {
 
   if (file) {
     pages = await countPages(file); // the server decides the page count
-    fileData = { ...(await saveFile(file.buffer)), fileName: file.originalname };
+    fileData = {
+      ...(await saveFile(file.buffer)),
+      fileName: file.originalname,
+    };
   }
 
   try {
@@ -119,7 +170,9 @@ async function createOrder(body, source, file, staffUser) {
   } catch (err) {
     // order failed: remove the uploaded file so it isn't left behind
     if (fileData.filePublicId) {
-      deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(() => {});
+      deleteFile(fileData.filePublicId, fileData.fileResourceType).catch(
+        () => {},
+      );
     }
     throw err;
   }
@@ -160,7 +213,9 @@ router.post("/pagecount", orderLimiter, uploadOne, async (req, res) => {
   try {
     res.json({ pages: await countPages(req.file) });
   } catch (err) {
-    res.status(400).json({ error: "Could not read this file. It may be damaged." });
+    res
+      .status(400)
+      .json({ error: "Could not read this file. It may be damaged." });
   }
 });
 
@@ -168,7 +223,8 @@ router.post("/pagecount", orderLimiter, uploadOne, async (req, res) => {
 router.post("/online", orderLimiter, uploadOne, async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "Please attach a file" });
   try {
-    res.status(201).json(await createOrder(req.body, "online", req.file, null));
+    const order = await createOrder(req.body, "online", req.file, null);
+    res.status(201).json(publicOrder(order));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -177,7 +233,9 @@ router.post("/online", orderLimiter, uploadOne, async (req, res) => {
 // Walk-in order: file is optional, staff only
 router.post("/walkin", ...staff, uploadOne, async (req, res) => {
   try {
-    res.status(201).json(await createOrder(req.body, "walkin", req.file, req.user));
+    res
+      .status(201)
+      .json(await createOrder(req.body, "walkin", req.file, req.user));
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
@@ -185,16 +243,67 @@ router.post("/walkin", ...staff, uploadOne, async (req, res) => {
 
 // Public tracking: only safe fields
 router.get("/track/:code", trackLimiter, async (req, res) => {
-  const order = await Order.findOne({ trackingCode: req.params.code.toUpperCase() });
-  if (!order) return res.status(404).json({ error: "Order not found" });
-  res.json({
-    trackingCode: order.trackingCode,
-    status: order.status,
-    price: order.price,
-    paid: order.paid,
-    paymentMethod: order.paymentMethod,
-    rejectReason: order.rejectReason,
+  const order = await Order.findOne({
+    trackingCode: req.params.code.toUpperCase(),
   });
+  if (!order) return res.status(404).json({ error: "Order not found" });
+  res.json(publicOrder(order));
+});
+
+// Customer: submit the UPI reference number
+router.post("/track/:code/upi", payLimiter, async (req, res) => {
+  const order = await findPayable(req, res);
+  if (!order) return;
+
+  const reference = String(req.body.reference || "").replace(/\s+/g, "");
+  if (!/^\d{12}$/.test(reference)) {
+    return res
+      .status(400)
+      .json({ error: "Enter the 12-digit UPI reference number from your payment app" });
+  }
+
+  const used = await Order.findOne({ upiReference: reference, _id: { $ne: order._id } });
+  if (used) {
+    return res.status(400).json({ error: "This reference number has already been used" });
+  }
+
+  try {
+    order.paymentMethod = "upi";
+    order.upiReference = reference;
+    order.status = "awaiting_confirmation";
+    await order.save();
+    res.json(publicOrder(order));
+  } catch (err) {
+    const msg =
+      err.code === 11000 ? "This reference number has already been used" : err.message;
+    res.status(400).json({ error: msg });
+  }
+});
+
+// Customer: chose to pay cash (the order stays quiet until they reach the counter)
+router.post("/track/:code/cash", payLimiter, async (req, res) => {
+  const order = await findPayable(req, res);
+  if (!order) return;
+  if (order.upiReference) {
+    return res.status(400).json({ error: "You already sent a UPI payment. Please ask the shop." });
+  }
+  order.paymentMethod = "cash";
+  await order.save();
+  res.json(publicOrder(order));
+});
+
+// Customer: "I'm at the counter" (this is what alerts the manager)
+router.post("/track/:code/counter", payLimiter, async (req, res) => {
+  const order = await findPayable(req, res);
+  if (!order) return;
+  if (order.upiReference) {
+    return res.status(400).json({ error: "You already sent a UPI payment. Please ask the shop." });
+  }
+  order.paymentMethod = "cash";
+  order.atCounterAt = new Date();
+  order.status = "awaiting_confirmation";
+  await order.save();
+  res.json(publicOrder(order));
 });
 
 // Staff: list orders. ?status= accepts one status or a comma-separated list
@@ -244,7 +353,11 @@ router.get("/:id/file", ...staff, async (req, res) => {
     return res.status(404).json({ error: "No file for this order" });
   }
   res.json({
-    url: getTempUrl(order.filePublicId, order.fileResourceType, order.fileFormat),
+    url: getTempUrl(
+      order.filePublicId,
+      order.fileResourceType,
+      order.fileFormat,
+    ),
   });
 });
 
@@ -267,7 +380,9 @@ router.patch("/:id", ...staff, async (req, res) => {
           : order.paymentMethod || "cash";
         order.paymentConfirmedAt = now;
         order.paymentConfirmedBy = req.user.username;
-        if (["awaiting_payment", "awaiting_confirmation"].includes(order.status)) {
+        if (
+          ["awaiting_payment", "awaiting_confirmation"].includes(order.status)
+        ) {
           order.status = "queued";
           order.queuedAt = now;
           order.expiresAt = undefined;
@@ -275,7 +390,8 @@ router.patch("/:id", ...staff, async (req, res) => {
       } else {
         if (order.status !== "queued" && !isBoss) {
           return res.status(400).json({
-            error: "This order is already being processed, so only an admin can mark it unpaid",
+            error:
+              "This order is already being processed, so only an admin can mark it unpaid",
           });
         }
         order.paid = false;
@@ -291,9 +407,14 @@ router.patch("/:id", ...staff, async (req, res) => {
         return res.status(400).json({ error: "Unknown status" });
       }
       if (NEEDS_PAYMENT.includes(status) && !order.paid) {
-        return res.status(400).json({ error: "Confirm the payment before printing" });
+        return res
+          .status(400)
+          .json({ error: "Confirm the payment before printing" });
       }
-      if (["awaiting_payment", "awaiting_confirmation"].includes(status) && order.paid) {
+      if (
+        ["awaiting_payment", "awaiting_confirmation"].includes(status) &&
+        order.paid
+      ) {
         return res.status(400).json({ error: "This order is already paid" });
       }
 
@@ -304,7 +425,9 @@ router.patch("/:id", ...staff, async (req, res) => {
       }
       if (status === "printed") order.printedAt = now;
       if (status === "rejected") {
-        order.rejectReason = String(rejectReason || "").trim().slice(0, 200);
+        order.rejectReason = String(rejectReason || "")
+          .trim()
+          .slice(0, 200);
       }
       if (["collected", "cancelled", "rejected"].includes(status)) {
         order.expiresAt = undefined;

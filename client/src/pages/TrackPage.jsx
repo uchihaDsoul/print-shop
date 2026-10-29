@@ -1,7 +1,14 @@
 import { useState } from "react";
 import { trackOrder } from "../api";
+import PaymentPanel from "../components/PaymentPanel";
 
-const STEPS = ["Order placed", "Payment confirmed", "Printing", "Ready", "Collected"];
+const STEPS = [
+  "Order placed",
+  "Payment confirmed",
+  "Printing",
+  "Ready",
+  "Collected",
+];
 
 const STEP_OF = {
   awaiting_payment: 0,
@@ -15,7 +22,7 @@ const STEP_OF = {
 };
 
 const MESSAGE = {
-  awaiting_payment: "Waiting for your payment. Pay at the shop to start printing.",
+  awaiting_payment: "Waiting for your payment.",
   awaiting_confirmation: "The shop is checking your payment.",
   queued: "Payment confirmed. Your file is in the print queue.",
   printing: "Your file is printing.",
@@ -43,12 +50,16 @@ export default function TrackPage() {
   }
 
   const current = order ? STEP_OF[order.status] : undefined;
-  const closed = order && (order.status === "rejected" || order.status === "cancelled");
+  const closed =
+    order && (order.status === "rejected" || order.status === "cancelled");
 
   return (
     <div className="card">
       <h2>Track your order</h2>
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <form
+        onSubmit={handleSubmit}
+        style={{ display: "flex", flexDirection: "column", gap: 14 }}
+      >
         <label>
           Tracking code
           <input
@@ -68,7 +79,10 @@ export default function TrackPage() {
           {!closed && (
             <div className="steps">
               {STEPS.map((label, i) => (
-                <div key={label} className={`step ${i <= current ? "done" : ""}`}>
+                <div
+                  key={label}
+                  className={`step ${i <= current ? "done" : ""}`}
+                >
                   <div className="dot">{i <= current ? "✓" : i + 1}</div>
                   {label}
                 </div>
@@ -87,8 +101,14 @@ export default function TrackPage() {
             Code: <strong>{order.trackingCode}</strong>
           </p>
           <p>
-            Amount: <strong>₹{order.price}</strong> ({order.paid ? "Paid" : "Not paid yet"})
+            Amount: <strong>₹{order.price}</strong> (
+            {order.paid ? "Paid" : "Not paid yet"})
           </p>
+
+          {order.source === "online" &&
+            ["awaiting_payment", "awaiting_confirmation"].includes(
+              order.status,
+            ) && <PaymentPanel order={order} onUpdate={setOrder} />}
         </div>
       )}
     </div>

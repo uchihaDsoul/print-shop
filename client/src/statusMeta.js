@@ -40,4 +40,4 @@ export const FILTERS = [
 ];
 
 // Used by the red badge in the sidebar
-export const NEEDS_ACTION = "awaiting_payment,awaiting_confirmation";
+export const NEEDS_ACTION = "awaiting_confirmation";
