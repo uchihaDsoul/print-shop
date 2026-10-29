@@ -23,7 +23,7 @@ const orderLimiter = rateLimit({
 });
 const trackLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 60,
+  max: 300,
   message: { error: "Too many requests. Please try again later." },
 });
 
@@ -259,12 +259,19 @@ router.post("/track/:code/upi", payLimiter, async (req, res) => {
   if (!/^\d{12}$/.test(reference)) {
     return res
       .status(400)
-      .json({ error: "Enter the 12-digit UPI reference number from your payment app" });
+      .json({
+        error: "Enter the 12-digit UPI reference number from your payment app",
+      });
   }
 
-  const used = await Order.findOne({ upiReference: reference, _id: { $ne: order._id } });
+  const used = await Order.findOne({
+    upiReference: reference,
+    _id: { $ne: order._id },
+  });
   if (used) {
-    return res.status(400).json({ error: "This reference number has already been used" });
+    return res
+      .status(400)
+      .json({ error: "This reference number has already been used" });
   }
 
   try {
@@ -275,7 +282,9 @@ router.post("/track/:code/upi", payLimiter, async (req, res) => {
     res.json(publicOrder(order));
   } catch (err) {
     const msg =
-      err.code === 11000 ? "This reference number has already been used" : err.message;
+      err.code === 11000
+        ? "This reference number has already been used"
+        : err.message;
     res.status(400).json({ error: msg });
   }
 });
@@ -285,7 +294,9 @@ router.post("/track/:code/cash", payLimiter, async (req, res) => {
   const order = await findPayable(req, res);
   if (!order) return;
   if (order.upiReference) {
-    return res.status(400).json({ error: "You already sent a UPI payment. Please ask the shop." });
+    return res
+      .status(400)
+      .json({ error: "You already sent a UPI payment. Please ask the shop." });
   }
   order.paymentMethod = "cash";
   await order.save();
@@ -297,7 +308,9 @@ router.post("/track/:code/counter", payLimiter, async (req, res) => {
   const order = await findPayable(req, res);
   if (!order) return;
   if (order.upiReference) {
-    return res.status(400).json({ error: "You already sent a UPI payment. Please ask the shop." });
+    return res
+      .status(400)
+      .json({ error: "You already sent a UPI payment. Please ask the shop." });
   }
   order.paymentMethod = "cash";
   order.atCounterAt = new Date();
