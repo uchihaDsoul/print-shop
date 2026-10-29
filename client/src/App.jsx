@@ -1,4 +1,11 @@
-import { Routes, Route, NavLink, Link, Navigate, Outlet } from "react-router-dom";
+import {
+  Routes,
+  Route,
+  NavLink,
+  Link,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
 import OrderPage from "./pages/OrderPage";
 import TrackPage from "./pages/TrackPage";
 import LoginPage from "./pages/LoginPage";
@@ -12,6 +19,7 @@ import PricingTab from "./pages/admin/PricingTab";
 import Icon from "./components/Icon";
 import { RequireRole, useAuth } from "./AuthContext";
 import { SHOP } from "./shopConfig";
+import SettingsTab from "./pages/admin/SettingsTab";
 
 const BOSS = ["admin", "superadmin"];
 
@@ -21,11 +29,15 @@ function PublicLayout() {
       <header className="topbar">
         <div className="topbar-inner">
           <Link to="/" className="brand">
-            <span className="brand-logo"><Icon name="printer" size={22} /></span>
+            <span className="brand-logo">
+              <Icon name="printer" size={22} />
+            </span>
             {SHOP.name}
           </Link>
           <nav>
-            <NavLink to="/" end>New order</NavLink>
+            <NavLink to="/" end>
+              New order
+            </NavLink>
             <NavLink to="/track">Track order</NavLink>
           </nav>
         </div>
@@ -36,7 +48,8 @@ function PublicLayout() {
       </main>
 
       <footer className="footer">
-        © {new Date().getFullYear()} {SHOP.name} · <Link to="/admin">Staff login</Link>
+        © {new Date().getFullYear()} {SHOP.name} ·{" "}
+        <Link to="/admin">Staff login</Link>
       </footer>
     </div>
   );
@@ -45,7 +58,12 @@ function PublicLayout() {
 // /admin lands on the Dashboard for bosses and on Orders for managers
 function AdminHome() {
   const { user } = useAuth();
-  return <Navigate to={user.role === "manager" ? "/admin/orders" : "/admin/dashboard"} replace />;
+  return (
+    <Navigate
+      to={user.role === "manager" ? "/admin/orders" : "/admin/dashboard"}
+      replace
+    />
+  );
 }
 
 export default function App() {
@@ -58,14 +76,57 @@ export default function App() {
         <Route path="*" element={<p>Page not found</p>} />
       </Route>
 
-      <Route path="/admin" element={<RequireRole><AdminLayout /></RequireRole>}>
+      <Route
+        path="/admin"
+        element={
+          <RequireRole>
+            <AdminLayout />
+          </RequireRole>
+        }
+      >
         <Route index element={<AdminHome />} />
-        <Route path="dashboard" element={<RequireRole roles={BOSS}><DashboardTab /></RequireRole>} />
+        <Route
+          path="dashboard"
+          element={
+            <RequireRole roles={BOSS}>
+              <DashboardTab />
+            </RequireRole>
+          }
+        />
         <Route path="orders" element={<OrdersTab />} />
         <Route path="walkin" element={<WalkinTab />} />
-        <Route path="customers" element={<RequireRole roles={BOSS}><CustomersTab /></RequireRole>} />
-        <Route path="pricing" element={<RequireRole roles={BOSS}><PricingTab /></RequireRole>} />
-        <Route path="users" element={<RequireRole roles={BOSS}><UsersPage /></RequireRole>} />
+        <Route
+          path="customers"
+          element={
+            <RequireRole roles={BOSS}>
+              <CustomersTab />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="pricing"
+          element={
+            <RequireRole roles={BOSS}>
+              <PricingTab />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="settings"
+          element={
+            <RequireRole roles={BOSS}>
+              <SettingsTab />
+            </RequireRole>
+          }
+        />
+        <Route
+          path="users"
+          element={
+            <RequireRole roles={BOSS}>
+              <UsersPage />
+            </RequireRole>
+          }
+        />
       </Route>
     </Routes>
   );

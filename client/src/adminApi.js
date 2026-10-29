@@ -41,3 +41,7 @@ export const deleteUser = (id) => call(`/users/${id}`, { method: "DELETE" });
 export const getFileLink = (id) => call(`/orders/${id}/file`);
 export const updatePricing = (data) =>
   call("/setting/pricing", body("PUT", data));
+
+export const getShopSettings = () => call("/settings/shop");
+export const updateShopSettings = (data) =>
+  call("/settings/shop", body("PUT", data));

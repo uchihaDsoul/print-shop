@@ -15,10 +15,15 @@ const TABS = [
   { to: "walkin", label: "Walk-in order", icon: "plus", roles: ALL },
   { to: "customers", label: "Customers", icon: "customers", roles: BOSS },
   { to: "pricing", label: "Pricing", icon: "pricing", roles: BOSS },
+  { to: "settings", label: "Settings", icon: "settings", roles: BOSS },
   { to: "users", label: "Staff", icon: "staff", roles: BOSS },
 ];
 
-const ROLE_LABEL = { superadmin: "Super admin", admin: "Admin", manager: "Store manager" };
+const ROLE_LABEL = {
+  superadmin: "Super admin",
+  admin: "Admin",
+  manager: "Store manager",
+};
 
 export default function AdminLayout() {
   const { user, logout } = useAuth();
@@ -46,7 +51,9 @@ export default function AdminLayout() {
     <div className="shell">
       <aside className="sidebar">
         <Link to="/admin" className="brand">
-          <span className="brand-logo"><Icon name="printer" size={22} /></span>
+          <span className="brand-logo">
+            <Icon name="printer" size={22} />
+          </span>
           <span>
             {SHOP.name}
             <small className="brand-sub">Admin</small>
@@ -58,7 +65,9 @@ export default function AdminLayout() {
             <NavLink key={t.to} to={t.to} className="side">
               <Icon name={t.icon} />
               {t.label}
-              {t.badge && pending > 0 && <span className="count">{pending}</span>}
+              {t.badge && pending > 0 && (
+                <span className="count">{pending}</span>
+              )}
             </NavLink>
           ))}
         </nav>
