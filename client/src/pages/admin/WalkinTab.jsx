@@ -16,6 +16,7 @@ const blank = {
   binding: false,
   urgent: false,
   note: "",
+  payment: "",
 };
 
 export default function WalkinTab() {
@@ -266,6 +267,21 @@ export default function WalkinTab() {
           onChange={handleChange}
           maxLength={300}
         />
+      </label>
+
+      <label>
+        Payment
+        <select
+          name="payment"
+          value={form.payment}
+          onChange={handleChange}
+          required
+        >
+          <option value="">Choose...</option>
+          <option value="cash">Cash received</option>
+          <option value="upi">UPI received</option>
+          <option value="none">Not paid yet</option>
+        </select>
       </label>
 
       <div className="price">

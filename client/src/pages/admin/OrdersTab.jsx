@@ -3,8 +3,7 @@ import { useAuth } from "../../AuthContext";
 import { listOrders, updateOrder, deleteOrder, getFileLink } from "../../adminApi";
 import Icon from "../../components/Icon";
 import { rupees, shortDate } from "../../format";
-
-const STATUSES = ["pending", "printing", "ready", "collected"];
+import { ALL_STATUSES, FILTERS, SORT_ORDER, statusLabel } from "../../statusMeta";
 
 export default function OrdersTab() {
   const { user } = useAuth();
@@ -18,6 +17,7 @@ export default function OrdersTab() {
   async function load() {
     try {
       setOrders(await listOrders(filter ? `?status=${filter}` : ""));
+      setError("");
     } catch (err) {
       setError(err.message);
     }
@@ -36,6 +36,19 @@ export default function OrdersTab() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  function changeStatus(order, value) {
+    if (value === "rejected") {
+      const reason = window.prompt("Reason for rejecting (the customer will see this):");
+      if (reason === null) return;
+      change(order._id, { status: value, rejectReason: reason });
+      return;
+    }
+    if (value === "cancelled" && !window.confirm("Cancel this order? Its file will be deleted.")) {
+      return;
+    }
+    change(order._id, { status: value });
   }
 
   async function remove(id) {
@@ -66,10 +79,10 @@ export default function OrdersTab() {
       o.phone.includes(q)
   );
 
-  // active first, urgent first, then oldest first
+  // needs attention first, urgent first, then oldest first
   const sorted = [...visible].sort(
     (a, b) =>
-      STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status) ||
+      SORT_ORDER.indexOf(a.status) - SORT_ORDER.indexOf(b.status) ||
       Number(b.urgent) - Number(a.urgent) ||
       new Date(a.createdAt) - new Date(b.createdAt)
   );
@@ -91,13 +104,13 @@ export default function OrdersTab() {
           />
         </div>
         <div className="chips">
-          {["", ...STATUSES].map((s) => (
+          {FILTERS.map((f) => (
             <button
-              key={s || "all"}
-              className={"chip" + (filter === s ? " on" : "")}
-              onClick={() => setFilter(s)}
+              key={f.label}
+              className={"chip" + (filter === f.value ? " on" : "")}
+              onClick={() => setFilter(f.value)}
             >
-              {s || "all"}
+              {f.label}
             </button>
           ))}
         </div>
@@ -113,7 +126,7 @@ export default function OrdersTab() {
               <strong>{o.trackingCode}</strong>
               <span>
                 <span className={`tag ${o.source}`}>{o.source}</span>{" "}
-                <span className={`badge ${o.status}`}>{o.status}</span>
+                <span className={`badge ${o.status}`}>{statusLabel(o.status)}</span>
               </span>
             </div>
 
@@ -136,11 +149,19 @@ export default function OrdersTab() {
             )}
 
             {o.note && <div className="order-note">📝 {o.note}</div>}
+            {o.status === "rejected" && o.rejectReason && (
+              <div className="order-note">Rejected: {o.rejectReason}</div>
+            )}
 
             <div className="order-total">
               <strong>{rupees(o.price)}</strong>
               <span className="note">
-                {o.paid ? "Paid" : "Not paid"} · {shortDate(o.createdAt)}
+                {o.paid
+                  ? `Paid (${o.paymentMethod || "n/a"}${
+                      o.paymentConfirmedBy ? ` · ${o.paymentConfirmedBy}` : ""
+                    })`
+                  : "Not paid"}{" "}
+                · {shortDate(o.createdAt)}
               </span>
             </div>
 
@@ -150,16 +171,36 @@ export default function OrdersTab() {
                   Open file
                 </button>
               )}
-              <select value={o.status} onChange={(e) => change(o._id, { status: e.target.value })}>
-                {STATUSES.map((s) => (
+
+              <select value={o.status} onChange={(e) => changeStatus(o, e.target.value)}>
+                {ALL_STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {s}
+                    {statusLabel(s)}
                   </option>
                 ))}
               </select>
-              <button className="small" onClick={() => change(o._id, { paid: !o.paid })}>
-                {o.paid ? "Mark unpaid" : "Mark paid"}
-              </button>
+
+              {o.paid ? (
+                <button className="small ghost" onClick={() => change(o._id, { paid: false })}>
+                  Mark unpaid
+                </button>
+              ) : (
+                <>
+                  <button
+                    className="small"
+                    onClick={() => change(o._id, { paid: true, paymentMethod: "cash" })}
+                  >
+                    Cash paid
+                  </button>
+                  <button
+                    className="small"
+                    onClick={() => change(o._id, { paid: true, paymentMethod: "upi" })}
+                  >
+                    UPI paid
+                  </button>
+                </>
+              )}
+
               {isBoss && (
                 <button className="small danger" onClick={() => remove(o._id)}>
                   Delete

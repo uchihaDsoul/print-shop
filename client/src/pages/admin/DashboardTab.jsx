@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { getStats, listOrders } from "../../adminApi";
 import { rupees, initials, shortDate } from "../../format";
+import { statusLabel } from "../../statusMeta";
 
 export default function DashboardTab() {
   const [stats, setStats] = useState([]);
@@ -28,11 +29,11 @@ export default function DashboardTab() {
   const todayPaid = stats.reduce((n, s) => n + s.paidTotal, 0);
   const todayOrders = stats.reduce((n, s) => n + s.orders, 0);
 
-  const count = (status) => orders.filter((o) => o.status === status).length;
-  const pending = count("pending");
-  const printing = count("printing");
+  const count = (...list) => orders.filter((o) => list.includes(o.status)).length;
+  const waiting = count("awaiting_payment", "awaiting_confirmation");
+  const toPrint = count("queued", "printing", "printed", "print_failed");
   const ready = count("ready");
-  const active = pending + printing + ready;
+  const active = waiting + toPrint + ready;
 
   const recent = orders.slice(0, 5); // the server sends newest first
 
@@ -51,12 +52,16 @@ export default function DashboardTab() {
         <div className="tile">
           <span className="t-label">Today's revenue</span>
           <span className="t-big">{rupees(todayTotal)}</span>
-          <span className="t-sub ok">{rupees(todayPaid)} paid · {todayOrders} orders</span>
+          <span className="t-sub ok">
+            {rupees(todayPaid)} paid · {todayOrders} orders
+          </span>
         </div>
         <div className="tile">
           <span className="t-label">Active orders</span>
           <span className="t-big">{active}</span>
-          <span className="t-sub warn">{pending} pending · {printing} printing</span>
+          <span className="t-sub warn">
+            {waiting} awaiting payment · {toPrint} to print
+          </span>
         </div>
         <div className="tile">
           <span className="t-label">Ready for pickup</span>
@@ -87,10 +92,12 @@ export default function DashboardTab() {
               <span className="av small-av">{initials(o.customerName)}</span>
               <div>
                 <strong>
-                  {o.customerName} <span className={`badge ${o.status}`}>{o.status}</span>
+                  {o.customerName}{" "}
+                  <span className={`badge ${o.status}`}>{statusLabel(o.status)}</span>
                 </strong>
                 <span className="note">
-                  {o.printPages || o.pages} pages · {o.size} · {rupees(o.price)} · {shortDate(o.createdAt)}
+                  {o.printPages || o.pages} pages · {o.size} · {rupees(o.price)} ·{" "}
+                  {shortDate(o.createdAt)}
                 </span>
               </div>
             </div>

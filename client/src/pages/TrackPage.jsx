@@ -1,12 +1,30 @@
 import { useState } from "react";
 import { trackOrder } from "../api";
 
-const STEPS = [
-  { key: "pending", label: "Received" },
-  { key: "printing", label: "Printing" },
-  { key: "ready", label: "Ready" },
-  { key: "collected", label: "Collected" },
-];
+const STEPS = ["Order placed", "Payment confirmed", "Printing", "Ready", "Collected"];
+
+const STEP_OF = {
+  awaiting_payment: 0,
+  awaiting_confirmation: 0,
+  queued: 1,
+  printing: 2,
+  printed: 2,
+  print_failed: 2,
+  ready: 3,
+  collected: 4,
+};
+
+const MESSAGE = {
+  awaiting_payment: "Waiting for your payment. Pay at the shop to start printing.",
+  awaiting_confirmation: "The shop is checking your payment.",
+  queued: "Payment confirmed. Your file is in the print queue.",
+  printing: "Your file is printing.",
+  printed: "Printed. The shop is checking your prints.",
+  print_failed: "There was a printing problem. The shop is fixing it.",
+  ready: "Your prints are ready for pickup!",
+  collected: "Collected. Thank you!",
+  cancelled: "This order was cancelled.",
+};
 
 export default function TrackPage() {
   const [code, setCode] = useState("");
@@ -24,7 +42,8 @@ export default function TrackPage() {
     }
   }
 
-  const current = order ? STEPS.findIndex((s) => s.key === order.status) : -1;
+  const current = order ? STEP_OF[order.status] : undefined;
+  const closed = order && (order.status === "rejected" || order.status === "cancelled");
 
   return (
     <div className="card">
@@ -35,7 +54,7 @@ export default function TrackPage() {
           <input
             value={code}
             onChange={(e) => setCode(e.target.value.toUpperCase())}
-            placeholder="e.g. A3F9K2"
+            placeholder="e.g. A3F9K2B7C1"
             required
           />
         </label>
@@ -46,17 +65,30 @@ export default function TrackPage() {
 
       {order && (
         <div className="result">
-          <div className="steps">
-            {STEPS.map((s, i) => (
-              <div key={s.key} className={`step ${i <= current ? "done" : ""}`}>
-                <div className="dot">{i <= current ? "✓" : i + 1}</div>
-                {s.label}
-              </div>
-            ))}
-          </div>
-          <p>Code: <strong>{order.trackingCode}</strong></p>
-          <p>Amount: <strong>₹{order.price}</strong> ({order.paid ? "Paid" : "Pay at shop"})</p>
-          {order.status === "ready" && <p><strong>🎉 Your prints are ready for pickup!</strong></p>}
+          {!closed && (
+            <div className="steps">
+              {STEPS.map((label, i) => (
+                <div key={label} className={`step ${i <= current ? "done" : ""}`}>
+                  <div className="dot">{i <= current ? "✓" : i + 1}</div>
+                  {label}
+                </div>
+              ))}
+            </div>
+          )}
+
+          <p>
+            <strong>
+              {order.status === "rejected"
+                ? `Payment was not accepted.${order.rejectReason ? ` Reason: ${order.rejectReason}` : ""}`
+                : MESSAGE[order.status]}
+            </strong>
+          </p>
+          <p>
+            Code: <strong>{order.trackingCode}</strong>
+          </p>
+          <p>
+            Amount: <strong>₹{order.price}</strong> ({order.paid ? "Paid" : "Not paid yet"})
+          </p>
         </div>
       )}
     </div>

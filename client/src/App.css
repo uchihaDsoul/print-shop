@@ -640,3 +640,12 @@ a.btn.ghost-link {
   .topbar-inner { border-radius: 22px; }
   .topbar nav a { padding: 7px 12px; font-size: 0.9rem; }
 }
+
+/* ---------- New order statuses ---------- */
+.badge.awaiting_payment { color: var(--warning); }
+.badge.awaiting_confirmation { color: var(--danger); }
+.badge.queued { color: var(--primary); }
+.badge.printed { color: var(--primary); }
+.badge.print_failed { color: #fff; background: var(--danger); border-color: transparent; }
+.badge.rejected { color: var(--danger); }
+.badge.cancelled { color: var(--muted); }

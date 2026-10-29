@@ -5,6 +5,7 @@ import { listOrders } from "../../adminApi";
 import Icon from "../../components/Icon";
 import { initials } from "../../format";
 import { SHOP } from "../../shopConfig";
+import { NEEDS_ACTION } from "../../statusMeta";
 
 const ALL = ["manager", "admin", "superadmin"];
 const BOSS = ["admin", "superadmin"];
@@ -33,7 +34,7 @@ export default function AdminLayout() {
     let alive = true;
     async function check() {
       try {
-        const list = await listOrders("?status=pending");
+        const list = await listOrders(`?status=${NEEDS_ACTION}`);
         if (alive) setPending(list.length);
       } catch {
         /* the pages show their own errors */
