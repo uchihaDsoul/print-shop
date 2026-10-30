@@ -559,6 +559,7 @@ router.patch("/:id", ...staff, async (req, res) => {
       if (status === "queued") {
         order.queuedAt = now;
         order.printError = "";
+        order.printAttempts = 0;
       }
       if (status === "printed") order.printedAt = now;
       if (status === "cancelled") order.cancelReason = "Cancelled by the shop";
