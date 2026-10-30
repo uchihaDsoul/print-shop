@@ -36,6 +36,11 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/settings", require("./routes/settings"));
 
+
+app.use("/api/computers", require("./routes/computers"));
+app.use("/api/printers", require("./routes/printers"));
+app.use("/api/agent", require("./routes/agent"));
+
 const PORT = process.env.PORT || 5000;
 
 mongoose
