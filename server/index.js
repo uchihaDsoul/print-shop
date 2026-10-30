@@ -6,6 +6,9 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const { loadPricing } = require("./utils/pricing");
+const { loadSettings } = require("./utils/settings");
+const { migrateOrders } = require("./utils/migrate");
+const { startExpiryJob } = require("./utils/expiry");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -33,6 +36,11 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/settings", require("./routes/settings"));
 
+
+app.use("/api/computers", require("./routes/computers"));
+app.use("/api/printers", require("./routes/printers"));
+app.use("/api/agent", require("./routes/agent"));
+
 const PORT = process.env.PORT || 5000;
 
 mongoose
@@ -40,6 +48,9 @@ mongoose
   .then(async () => {
     console.log("MongoDB connected");
     await loadPricing();
+    await loadSettings();
+    await migrateOrders();
+    startExpiryJob();
     app.listen(PORT, () => console.log(`Server on port ${PORT}`));
   })
   .catch((err) => console.error("Startup failed:", err.message));
