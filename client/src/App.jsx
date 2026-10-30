@@ -18,6 +18,8 @@ import WalkinTab from "./pages/admin/WalkinTab";
 import CustomersTab from "./pages/admin/CustomersTab";
 import PricingTab from "./pages/admin/PricingTab";
 import SettingsTab from "./pages/admin/SettingsTab";
+import ComputersTab from "./pages/admin/ComputersTab";
+import PrintersTab from "./pages/admin/PrintersTab";
 import Icon from "./components/Icon";
 import { RequireRole, useAuth } from "./AuthContext";
 import { SHOP } from "./shopConfig";
@@ -119,6 +121,15 @@ export default function App() {
           element={
             <RequireRole roles={BOSS}>
               <SettingsTab />
+            </RequireRole>
+          }
+        />
+        <Route path="printers" element={<PrintersTab />} />
+        <Route
+          path="computers"
+          element={
+            <RequireRole roles={BOSS}>
+              <ComputersTab />
             </RequireRole>
           }
         />

@@ -51,3 +51,15 @@ export const confirmPayment = (id, method) =>
   call(`/orders/${id}/confirm`, body("POST", { method }));
 export const rejectPayment = (id, reason) =>
   call(`/orders/${id}/reject`, body("POST", { reason }));
+
+
+export const listComputers = () => call("/computers");
+export const addComputer = (name) => call("/computers", body("POST", { name }));
+export const newComputerCode = (id) => call(`/computers/${id}/code`, { method: "POST" });
+export const deleteComputer = (id) => call(`/computers/${id}`, { method: "DELETE" });
+
+export const listPrinters = () => call("/printers");
+export const printerAction = (id, action) =>
+  call(`/printers/${id}/${action}`, { method: "POST" });
+export const updatePrinter = (id, data) =>
+  call(`/printers/${id}`, body("PATCH", data));

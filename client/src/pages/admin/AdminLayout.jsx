@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Link, Outlet } from "react-router-dom";
 import { useAuth } from "../../AuthContext";
 import { RequestsProvider, useRequests } from "../../RequestsContext";
 import RequestToasts from "../../components/RequestToasts";
 import Icon from "../../components/Icon";
+import { listPrinters } from "../../adminApi";
 import { initials } from "../../format";
 import { SHOP } from "../../shopConfig";
 
@@ -18,6 +19,8 @@ const TABS = [
   { to: "customers", label: "Customers", icon: "customers", roles: BOSS },
   { to: "pricing", label: "Pricing", icon: "pricing", roles: BOSS },
   { to: "settings", label: "Settings", icon: "settings", roles: BOSS },
+  { to: "printers", label: "Printers", icon: "printer", roles: ALL },
+  { to: "computers", label: "Computers", icon: "settings", roles: BOSS },
   { to: "users", label: "Staff", icon: "staff", roles: BOSS },
 ];
 
@@ -27,6 +30,29 @@ function Shell() {
   const { user, logout } = useAuth();
   const { requests, soundOn, needsClick, enableSound, disableSound } = useRequests();
   const [hideBanner, setHideBanner] = useState(false);
+  const [printerAlerts, setPrinterAlerts] = useState(0);
+
+  useEffect(() => {
+    let stop = false;
+    async function check() {
+      try {
+        const list = await listPrinters();
+        const boss = ["admin", "superadmin"].includes(user.role);
+        const n = list.filter(
+          (p) => p.status === "detected" || (boss && p.status === "waiting_approval")
+        ).length;
+        if (!stop) setPrinterAlerts(n);
+      } catch {
+        // ignore, we try again in 30 seconds
+      }
+    }
+    check();
+    const t = setInterval(check, 30000);
+    return () => {
+      stop = true;
+      clearInterval(t);
+    };
+  }, [user.role]);
 
   return (
     <div className="shell">
@@ -47,6 +73,9 @@ function Shell() {
               <Icon name={t.icon} />
               {t.label}
               {t.badge && requests.length > 0 && <span className="count">{requests.length}</span>}
+              {t.to === "printers" && printerAlerts > 0 && (
+                <span className="count">{printerAlerts}</span>
+              )}
             </NavLink>
           ))}
         </nav>
