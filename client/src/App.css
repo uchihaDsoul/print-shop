@@ -1340,3 +1340,8 @@ button.linklike {
 button.linklike:hover:not(:disabled) { transform: none; box-shadow: none; }
 
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+.tick.bad {
+  background: linear-gradient(135deg, #be123c, #f43f5e);
+  box-shadow: 0 8px 24px rgba(225, 29, 72, 0.4);
+}

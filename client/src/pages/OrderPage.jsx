@@ -52,7 +52,10 @@ export default function OrderPage() {
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-    setForm((prev) => ({ ...prev, [name]: type === "checkbox" ? checked : value }));
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   }
 
   async function handleFile(e) {
@@ -113,7 +116,7 @@ export default function OrderPage() {
   // after payment is sent, follow the order's status so the screen updates by itself
   useEffect(() => {
     if (!placed) return;
-    if (["awaiting_payment", "collected", "rejected", "cancelled"].includes(placed.status)) return;
+    if (["collected", "rejected", "cancelled"].includes(placed.status)) return;
 
     const timer = setInterval(() => {
       if (document.hidden) return;
@@ -131,6 +134,11 @@ export default function OrderPage() {
     try {
       const order = await placeOrder(form, file);
       setPlaced(order);
+      try {
+        localStorage.setItem("lastTrack", order.trackingCode);
+      } catch {
+        /* storage may be blocked, which is fine */
+      }
       setShowPay(true); // open the payment popup
       setForm(initialForm);
       setFile(null);
@@ -148,7 +156,10 @@ export default function OrderPage() {
   function closeModal() {
     setShowPay(false);
     // finished orders don't need the banner any more
-    if (placed && ["collected", "rejected", "cancelled"].includes(placed.status)) {
+    if (
+      placed &&
+      ["collected", "rejected", "cancelled"].includes(placed.status)
+    ) {
       setPlaced(null);
     }
   }
@@ -168,15 +179,25 @@ export default function OrderPage() {
           <div>
             <strong>Order {placed.trackingCode}</strong>
             <div className="note">
-              {paying ? "Waiting for your payment" : HEADLINE[placed.status] || statusLabel(placed.status)}
+              {paying
+                ? "Waiting for your payment"
+                : HEADLINE[placed.status] || statusLabel(placed.status)}
             </div>
           </div>
           <div className="actions">
-            <button type="button" className="small" onClick={() => setShowPay(true)}>
+            <button
+              type="button"
+              className="small"
+              onClick={() => setShowPay(true)}
+            >
               {paying ? "Pay now" : "View"}
             </button>
             {!paying && (
-              <button type="button" className="small ghost" onClick={() => setPlaced(null)}>
+              <button
+                type="button"
+                className="small ghost"
+                onClick={() => setPlaced(null)}
+              >
                 Dismiss
               </button>
             )}
@@ -189,7 +210,12 @@ export default function OrderPage() {
         <div className="row">
           <label>
             Your name
-            <input name="customerName" value={form.customerName} onChange={handleChange} required />
+            <input
+              name="customerName"
+              value={form.customerName}
+              onChange={handleChange}
+              required
+            />
           </label>
           <label>
             Phone number
@@ -269,7 +295,12 @@ export default function OrderPage() {
         </div>
 
         <label className="check">
-          <input type="checkbox" name="color" checked={form.color} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="color"
+            checked={form.color}
+            onChange={handleChange}
+          />
           Color print
         </label>
         <label className="check">
@@ -284,15 +315,30 @@ export default function OrderPage() {
 
         <h3>4. Finishing</h3>
         <label className="check">
-          <input type="checkbox" name="stapling" checked={form.stapling} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="stapling"
+            checked={form.stapling}
+            onChange={handleChange}
+          />
           Stapling
         </label>
         <label className="check">
-          <input type="checkbox" name="binding" checked={form.binding} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="binding"
+            checked={form.binding}
+            onChange={handleChange}
+          />
           Spiral binding
         </label>
         <label className="check">
-          <input type="checkbox" name="urgent" checked={form.urgent} onChange={handleChange} />
+          <input
+            type="checkbox"
+            name="urgent"
+            checked={form.urgent}
+            onChange={handleChange}
+          />
           Urgent (priority printing)
         </label>
         <label>
@@ -312,10 +358,15 @@ export default function OrderPage() {
           <strong>₹{price}</strong>
         </div>
 
-        <p className="note">🔒 Your file is deleted after you collect your prints.</p>
+        <p className="note">
+          🔒 Your file is deleted after you collect your prints.
+        </p>
         {error && <p className="error">{error}</p>}
 
-        <button type="submit" disabled={loading || counting || !file || Boolean(rangeError)}>
+        <button
+          type="submit"
+          disabled={loading || counting || !file || Boolean(rangeError)}
+        >
           {loading ? "Placing order..." : "Place order"}
         </button>
       </form>
@@ -324,7 +375,11 @@ export default function OrderPage() {
       <ShopInfo />
 
       {/* payment popup */}
-      <Modal open={Boolean(placed) && showPay} onClose={closeModal} title="Payment">
+      <Modal
+        open={Boolean(placed) && showPay}
+        onClose={closeModal}
+        title="Payment"
+      >
         {placed && (
           <div className="modal-body">
             {paying ? (
@@ -337,7 +392,11 @@ export default function OrderPage() {
               </>
             ) : (
               <>
-                <div className="tick">✓</div>
+                {["rejected", "cancelled"].includes(placed.status) ? (
+                  <div className="tick bad">✕</div>
+                ) : (
+                  <div className="tick">✓</div>
+                )}
                 <h2>{HEADLINE[placed.status] || statusLabel(placed.status)}</h2>
               </>
             )}
@@ -353,8 +412,9 @@ export default function OrderPage() {
 
             {paying ? (
               <p className="note">
-                Your order is saved. If you close this window, tap <strong>Pay now</strong> on the
-                page, or pay later from Track order with this code.
+                Your order is saved. If you close this window, tap{" "}
+                <strong>Pay now</strong> on the page, or pay later from Track
+                order with this code.
               </p>
             ) : (
               <button type="button" className="ghost" onClick={closeModal}>

@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
-import { getPublicSettings, submitUpi, chooseCash, atCounter } from "../api";
+import {
+  getPublicSettings,
+  submitUpi,
+  chooseCash,
+  atCounter,
+  cancelOrder,
+} from "../api";
 
 export default function PaymentPanel({ order, onUpdate }) {
   const [settings, setSettings] = useState(null);
@@ -29,7 +35,10 @@ export default function PaymentPanel({ order, onUpdate }) {
 
   const code = order.trackingCode;
   const deadline = order.expiresAt
-    ? new Date(order.expiresAt).toLocaleTimeString("en-IN", { hour: "numeric", minute: "2-digit" })
+    ? new Date(order.expiresAt).toLocaleTimeString("en-IN", {
+        hour: "numeric",
+        minute: "2-digit",
+      })
     : "";
 
   // 1) the customer has paid or arrived, and the shop is checking
@@ -40,10 +49,14 @@ export default function PaymentPanel({ order, onUpdate }) {
         <p>
           {order.paymentMethod === "cash"
             ? "The shop knows you're at the counter. Please pay the manager."
-            : settings?.waitMessage || "The shop will confirm your payment shortly."}
+            : settings?.waitMessage ||
+              "The shop will confirm your payment shortly."}
         </p>
         {order.paymentMethod === "upi" && (
-          <p className="note">Your reference number was received. Printing starts after the shop confirms it.</p>
+          <p className="note">
+            Your reference number was received. Printing starts after the shop
+            confirms it.
+          </p>
         )}
       </div>
     );
@@ -85,7 +98,9 @@ export default function PaymentPanel({ order, onUpdate }) {
       {method === "upi" && !settings && <p className="note">Loading...</p>}
 
       {method === "upi" && settings && !upiId && (
-        <p className="error">UPI payment isn't set up yet. Please pay cash at the shop.</p>
+        <p className="error">
+          UPI payment isn't set up yet. Please pay cash at the shop.
+        </p>
       )}
 
       {method === "upi" && upiId && (
@@ -105,15 +120,17 @@ export default function PaymentPanel({ order, onUpdate }) {
             After paying, enter the 12-digit UPI reference number
             <input
               value={reference}
-              onChange={(e) => setReference(e.target.value.replace(/\D/g, "").slice(0, 12))}
+              onChange={(e) =>
+                setReference(e.target.value.replace(/\D/g, "").slice(0, 12))
+              }
               inputMode="numeric"
               placeholder="e.g. 412345678901"
               autoComplete="off"
             />
           </label>
           <p className="note">
-            You'll find it in your payment app as "UPI Ref No." or "UTR". The shop checks it against
-            their bank before printing.
+            You'll find it in your payment app as "UPI Ref No." or "UTR". The
+            shop checks it against their bank before printing.
           </p>
           <button
             type="button"
@@ -128,16 +145,39 @@ export default function PaymentPanel({ order, onUpdate }) {
       {method === "cash" && (
         <>
           <p>
-            Come to the shop and show your tracking code <strong>{code}</strong>. When you're at the
-            counter, tap the button below so the manager knows you're there.
+            Come to the shop and show your tracking code <strong>{code}</strong>
+            . When you're at the counter, tap the button below so the manager
+            knows you're there.
           </p>
-          <button type="button" disabled={busy} onClick={() => run(() => atCounter(code))}>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => run(() => atCounter(code))}
+          >
             {busy ? "Sending..." : "I'm at the counter"}
           </button>
         </>
       )}
 
-      {deadline && <p className="note">Please pay before {deadline}, or this order is cancelled.</p>}
+      {deadline && (
+        <p className="note">
+          Please pay before {deadline}, or this order is cancelled.
+        </p>
+      )}
+
+      <button
+        type="button"
+        className="linklike"
+        disabled={busy}
+        onClick={() => {
+          if (window.confirm("Cancel this order? Your file will be deleted.")) {
+            run(() => cancelOrder(code));
+          }
+        }}
+      >
+        Cancel this order
+      </button>
+
       {error && <p className="error">{error}</p>}
     </div>
   );

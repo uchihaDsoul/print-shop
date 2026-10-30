@@ -171,6 +171,9 @@ export default function OrdersTab() {
             {o.status === "rejected" && o.rejectReason && (
               <div className="order-note">Rejected: {o.rejectReason}</div>
             )}
+            {o.status === "cancelled" && o.cancelReason && (
+              <div className="order-note">Cancelled: {o.cancelReason}</div>
+            )}
             {o.upiReference && (
               <div className="order-note">
                 UPI reference: <strong>{o.upiReference}</strong> · check ₹

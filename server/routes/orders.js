@@ -57,6 +57,7 @@ function publicOrder(o) {
     paid: o.paid,
     paymentMethod: o.paymentMethod,
     rejectReason: o.rejectReason,
+    cancelReason: o.cancelReason,
     atCounter: Boolean(o.atCounterAt),
     upiSubmitted: Boolean(o.upiReference),
     expiresAt: o.expiresAt || null,
@@ -257,11 +258,9 @@ router.post("/track/:code/upi", payLimiter, async (req, res) => {
 
   const reference = String(req.body.reference || "").replace(/\s+/g, "");
   if (!/^\d{12}$/.test(reference)) {
-    return res
-      .status(400)
-      .json({
-        error: "Enter the 12-digit UPI reference number from your payment app",
-      });
+    return res.status(400).json({
+      error: "Enter the 12-digit UPI reference number from your payment app",
+    });
   }
 
   const used = await Order.findOne({
@@ -317,6 +316,41 @@ router.post("/track/:code/counter", payLimiter, async (req, res) => {
   order.status = "awaiting_confirmation";
   await order.save();
   res.json(publicOrder(order));
+});
+
+// Customer: cancel an order that is still unpaid
+router.post("/track/:code/cancel", payLimiter, async (req, res) => {
+  const order = await Order.findOne({
+    trackingCode: String(req.params.code).toUpperCase(),
+  });
+  if (!order) return res.status(404).json({ error: "Order not found" });
+
+  if (
+    order.source !== "online" ||
+    order.status !== "awaiting_payment" ||
+    order.paid
+  ) {
+    return res.status(400).json({
+      error: "This order can no longer be cancelled here. Please ask the shop.",
+    });
+  }
+
+  const updated = await Order.findOneAndUpdate(
+    { _id: order._id, status: "awaiting_payment", paid: false },
+    {
+      $set: { status: "cancelled", cancelReason: "Cancelled by customer" },
+      $unset: { expiresAt: "" },
+    },
+    { new: true },
+  );
+  if (!updated)
+    return res
+      .status(409)
+      .json({ error: "This order has just changed. Please check again." });
+
+  await removeOrderFile(updated);
+  await updated.save();
+  res.json(publicOrder(updated));
 });
 
 // Staff: list orders. ?status= accepts one status or a comma-separated list
@@ -401,11 +435,13 @@ router.post("/:id/confirm", ...staff, async (req, res) => {
         },
         $unset: { expiresAt: "" },
       },
-      { new: true }
+      { new: true },
     );
 
     if (!updated) {
-      return res.status(409).json({ error: "Someone else already handled this order" });
+      return res
+        .status(409)
+        .json({ error: "Someone else already handled this order" });
     }
     res.json(updated);
   } catch (err) {
@@ -416,7 +452,9 @@ router.post("/:id/confirm", ...staff, async (req, res) => {
 // Staff: reject a payment (the first click wins), and delete the file
 router.post("/:id/reject", ...staff, async (req, res) => {
   try {
-    const reason = String(req.body.reason || "").trim().slice(0, 200);
+    const reason = String(req.body.reason || "")
+      .trim()
+      .slice(0, 200);
 
     const updated = await Order.findOneAndUpdate(
       {
@@ -424,12 +462,17 @@ router.post("/:id/reject", ...staff, async (req, res) => {
         paid: false,
         status: { $in: ["awaiting_payment", "awaiting_confirmation"] },
       },
-      { $set: { status: "rejected", rejectReason: reason }, $unset: { expiresAt: "" } },
-      { new: true }
+      {
+        $set: { status: "rejected", rejectReason: reason },
+        $unset: { expiresAt: "" },
+      },
+      { new: true },
     );
 
     if (!updated) {
-      return res.status(409).json({ error: "Order not found, or someone already handled it" });
+      return res
+        .status(409)
+        .json({ error: "Order not found, or someone already handled it" });
     }
 
     await removeOrderFile(updated);
@@ -518,6 +561,7 @@ router.patch("/:id", ...staff, async (req, res) => {
         order.printError = "";
       }
       if (status === "printed") order.printedAt = now;
+      if (status === "cancelled") order.cancelReason = "Cancelled by the shop";
       if (status === "rejected") {
         order.rejectReason = String(rejectReason || "")
           .trim()

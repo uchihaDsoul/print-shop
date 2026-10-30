@@ -73,6 +73,7 @@ export default function App() {
       <Route element={<PublicLayout />}>
         <Route path="/" element={<OrderPage />} />
         <Route path="/track" element={<TrackPage />} />
+        <Route path="/track/:code" element={<TrackPage />} />
         <Route path="/admin/login" element={<LoginPage />} />
         <Route path="*" element={<p>Page not found</p>} />
       </Route>

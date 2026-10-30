@@ -8,6 +8,7 @@ const mongoose = require("mongoose");
 const { loadPricing } = require("./utils/pricing");
 const { loadSettings } = require("./utils/settings");
 const { migrateOrders } = require("./utils/migrate");
+const { startExpiryJob } = require("./utils/expiry");
 
 const app = express();
 app.set("trust proxy", 1);
@@ -44,6 +45,7 @@ mongoose
     await loadPricing();
     await loadSettings();
     await migrateOrders();
+    startExpiryJob();
     app.listen(PORT, () => console.log(`Server on port ${PORT}`));
   })
   .catch((err) => console.error("Startup failed:", err.message));

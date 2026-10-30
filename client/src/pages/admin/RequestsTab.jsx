@@ -15,6 +15,12 @@ function waited(since, now) {
   return mins < 1 ? "just now" : `${mins} min`;
 }
 
+function expiresIn(at, now) {
+  if (!at) return "";
+  const m = Math.ceil((new Date(at) - now) / 60000);
+  return m > 0 ? ` · expires in ${m} min` : " · expiring now";
+}
+
 export default function RequestsTab() {
   const { requests, unpaid, queued, error: loadError, refresh } = useRequests();
   const [now, setNow] = useState(Date.now());
@@ -229,7 +235,7 @@ export default function RequestsTab() {
                 <div className="note">
                   {rupees(o.price)} · {o.source}
                   {o.paymentMethod ? ` · chose ${o.paymentMethod}` : ""} · ordered{" "}
-                  {waited(o.createdAt, now)} ago
+                  {waited(o.createdAt, now)} ago{expiresIn(o.expiresAt, now)}
                 </div>
               </div>
               <div className="actions">

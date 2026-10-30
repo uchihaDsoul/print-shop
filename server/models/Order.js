@@ -37,6 +37,7 @@ const orderSchema = new mongoose.Schema(
     paymentConfirmedAt: { type: Date },
     paymentConfirmedBy: { type: String, default: "" },
     rejectReason: { type: String, default: "", maxlength: 200 },
+    cancelReason: { type: String, default: "", maxlength: 200 },
     atCounterAt: { type: Date }, // customer tapped "I'm at the counter" (step 1.4)
     expiresAt: { type: Date }, // unpaid online orders expire (step 1.6)
 
