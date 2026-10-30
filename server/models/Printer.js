@@ -1,15 +1,30 @@
 const mongoose = require("mongoose");
 
-const STATUSES = ["detected", "waiting_approval", "active", "paused", "ignored", "missing"];
+const STATUSES = [
+  "detected",
+  "waiting_approval",
+  "active",
+  "paused",
+  "ignored",
+  "missing",
+];
 
 const printerSchema = new mongoose.Schema(
   {
-    computer: { type: mongoose.Schema.Types.ObjectId, ref: "Computer", required: true },
+    computer: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Computer",
+      required: true,
+    },
     windowsName: { type: String, required: true }, // exact Windows name
     displayName: { type: String, default: "" },
     portName: { type: String, default: "" },
     driverName: { type: String, default: "" },
-    connection: { type: String, enum: ["usb", "wifi", "virtual", "unknown"], default: "unknown" },
+    connection: {
+      type: String,
+      enum: ["usb", "wifi", "virtual", "unknown"],
+      default: "unknown",
+    },
     isVirtual: { type: Boolean, default: false },
     testPrinter: { type: Boolean, default: false },
     status: { type: String, enum: STATUSES, default: "detected" },
@@ -19,11 +34,20 @@ const printerSchema = new mongoose.Schema(
     isDefault: { type: Boolean, default: false },
     dailyLimit: { type: Number, default: null }, // null = no limit
     dailyPages: { type: Number, default: 0 },
-    requestedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
-    approvedBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+    dailyPagesDate: { type: String, default: "" }, // the IST day that dailyPages belongs to
+    requestedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    approvedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
     lastSeenAt: { type: Date, default: null },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 printerSchema.index({ computer: 1, windowsName: 1 }, { unique: true });

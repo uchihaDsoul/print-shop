@@ -4,7 +4,7 @@ import { useAuth } from "../../AuthContext";
 import { RequestsProvider, useRequests } from "../../RequestsContext";
 import RequestToasts from "../../components/RequestToasts";
 import Icon from "../../components/Icon";
-import { listPrinters } from "../../adminApi";
+import { listPrinters, listPrintQueue } from "../../adminApi";
 import { initials } from "../../format";
 import { SHOP } from "../../shopConfig";
 
@@ -19,18 +19,32 @@ const TABS = [
   { to: "customers", label: "Customers", icon: "customers", roles: BOSS },
   { to: "pricing", label: "Pricing", icon: "pricing", roles: BOSS },
   { to: "settings", label: "Settings", icon: "settings", roles: BOSS },
+  {
+    to: "queue",
+    label: "Print queue",
+    icon: "orders",
+    roles: ALL,
+    queueBadge: true,
+  },
   { to: "printers", label: "Printers", icon: "printer", roles: ALL },
   { to: "computers", label: "Computers", icon: "settings", roles: BOSS },
   { to: "users", label: "Staff", icon: "staff", roles: BOSS },
 ];
 
-const ROLE_LABEL = { superadmin: "Super admin", admin: "Admin", manager: "Store manager" };
+const ROLE_LABEL = {
+  superadmin: "Super admin",
+  admin: "Admin",
+  manager: "Store manager",
+};
 
 function Shell() {
   const { user, logout } = useAuth();
-  const { requests, soundOn, needsClick, enableSound, disableSound } = useRequests();
+  const { requests, soundOn, needsClick, enableSound, disableSound } =
+    useRequests();
   const [hideBanner, setHideBanner] = useState(false);
   const [printerAlerts, setPrinterAlerts] = useState(0);
+
+  const [queueAlerts, setQueueAlerts] = useState(0);
 
   useEffect(() => {
     let stop = false;
@@ -39,9 +53,18 @@ function Shell() {
         const list = await listPrinters();
         const boss = ["admin", "superadmin"].includes(user.role);
         const n = list.filter(
-          (p) => p.status === "detected" || (boss && p.status === "waiting_approval")
+          (p) =>
+            p.status === "detected" ||
+            (boss && p.status === "waiting_approval"),
         ).length;
         if (!stop) setPrinterAlerts(n);
+
+        const q = await listPrintQueue();
+        if (!stop)
+          setQueueAlerts(
+            q.filter((o) => ["printed", "print_failed"].includes(o.status))
+              .length,
+          );
       } catch {
         // ignore, we try again in 30 seconds
       }
@@ -72,9 +95,14 @@ function Shell() {
             <NavLink key={t.to} to={t.to} className="side">
               <Icon name={t.icon} />
               {t.label}
-              {t.badge && requests.length > 0 && <span className="count">{requests.length}</span>}
+              {t.badge && requests.length > 0 && (
+                <span className="count">{requests.length}</span>
+              )}
               {t.to === "printers" && printerAlerts > 0 && (
                 <span className="count">{printerAlerts}</span>
+              )}
+              {t.queueBadge && queueAlerts > 0 && (
+                <span className="count">{queueAlerts}</span>
               )}
             </NavLink>
           ))}
@@ -88,7 +116,10 @@ function Shell() {
               <small>{ROLE_LABEL[user.role] || user.role}</small>
             </span>
           </div>
-          <button className="small ghost" onClick={soundOn ? disableSound : enableSound}>
+          <button
+            className="small ghost"
+            onClick={soundOn ? disableSound : enableSound}
+          >
             {soundOn ? "Mute alerts" : "Turn on alert sound"}
           </button>
           <button className="small ghost" onClick={logout}>
@@ -111,7 +142,10 @@ function Shell() {
                   Turn on sound
                 </button>
               )}
-              <button className="small ghost" onClick={() => setHideBanner(true)}>
+              <button
+                className="small ghost"
+                onClick={() => setHideBanner(true)}
+              >
                 Hide
               </button>
             </span>

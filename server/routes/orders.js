@@ -483,6 +483,25 @@ router.post("/:id/reject", ...staff, async (req, res) => {
   }
 });
 
+// Staff: release a queued, paid order to the printer (used when print timing is "manual")
+router.post("/:id/printnow", ...staff, async (req, res) => {
+  try {
+    const updated = await Order.findOneAndUpdate(
+      { _id: req.params.id, status: "queued", paid: true },
+      { $set: { printNow: true } },
+      { new: true },
+    );
+    if (!updated) {
+      return res
+        .status(409)
+        .json({ error: "Order is not waiting in the print queue" });
+    }
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Staff: temporary link to the order's file
 router.get("/:id/file", ...staff, async (req, res) => {
   const order = await Order.findById(req.params.id);
@@ -559,6 +578,8 @@ router.patch("/:id", ...staff, async (req, res) => {
       if (status === "queued") {
         order.queuedAt = now;
         order.printError = "";
+        order.printAttempts = 0;
+        order.printNow = true; // a person pressed Retry, so no second tap is needed
       }
       if (status === "printed") order.printedAt = now;
       if (status === "cancelled") order.cancelReason = "Cancelled by the shop";

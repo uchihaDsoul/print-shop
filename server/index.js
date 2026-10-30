@@ -41,6 +41,8 @@ app.use("/api/computers", require("./routes/computers"));
 app.use("/api/printers", require("./routes/printers"));
 app.use("/api/agent", require("./routes/agent"));
 
+app.use("/api/agent/jobs", require("./routes/agentJobs"));
+
 const PORT = process.env.PORT || 5000;
 
 mongoose

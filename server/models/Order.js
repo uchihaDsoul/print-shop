@@ -63,6 +63,9 @@ const orderSchema = new mongoose.Schema(
     printAttempts: { type: Number, default: 0 },
     printError: { type: String, default: "" },
     printerName: { type: String, default: "" },
+    claimedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Computer" }, // which PC took the job
+    claimedAt: { type: Date },
+    printNow: { type: Boolean, default: false }, // used when print timing is "manual" (button comes in 4.4)
 
     // orders from before the payment flow existed (the print agent skips them)
     legacy: { type: Boolean, default: false },

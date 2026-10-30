@@ -52,14 +52,22 @@ export const confirmPayment = (id, method) =>
 export const rejectPayment = (id, reason) =>
   call(`/orders/${id}/reject`, body("POST", { reason }));
 
-
 export const listComputers = () => call("/computers");
 export const addComputer = (name) => call("/computers", body("POST", { name }));
-export const newComputerCode = (id) => call(`/computers/${id}/code`, { method: "POST" });
-export const deleteComputer = (id) => call(`/computers/${id}`, { method: "DELETE" });
+export const newComputerCode = (id) =>
+  call(`/computers/${id}/code`, { method: "POST" });
+export const deleteComputer = (id) =>
+  call(`/computers/${id}`, { method: "DELETE" });
 
 export const listPrinters = () => call("/printers");
 export const printerAction = (id, action) =>
   call(`/printers/${id}/${action}`, { method: "POST" });
 export const updatePrinter = (id, data) =>
   call(`/printers/${id}`, body("PATCH", data));
+
+export const listPrintQueue = () =>
+  call("/orders?status=queued,printing,printed,print_failed,ready");
+export const setOrderStatus = (id, status) =>
+  call(`/orders/${id}`, body("PATCH", { status }));
+export const printNow = (id) =>
+  call(`/orders/${id}/printnow`, { method: "POST" });
