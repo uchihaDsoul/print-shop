@@ -11,15 +11,16 @@ import TrackPage from "./pages/TrackPage";
 import LoginPage from "./pages/LoginPage";
 import UsersPage from "./pages/UsersPage";
 import AdminLayout from "./pages/admin/AdminLayout";
+import RequestsTab from "./pages/admin/RequestsTab";
 import DashboardTab from "./pages/admin/DashboardTab";
 import OrdersTab from "./pages/admin/OrdersTab";
 import WalkinTab from "./pages/admin/WalkinTab";
 import CustomersTab from "./pages/admin/CustomersTab";
 import PricingTab from "./pages/admin/PricingTab";
+import SettingsTab from "./pages/admin/SettingsTab";
 import Icon from "./components/Icon";
 import { RequireRole, useAuth } from "./AuthContext";
 import { SHOP } from "./shopConfig";
-import SettingsTab from "./pages/admin/SettingsTab";
 
 const BOSS = ["admin", "superadmin"];
 
@@ -55,12 +56,12 @@ function PublicLayout() {
   );
 }
 
-// /admin lands on the Dashboard for bosses and on Orders for managers
+// /admin lands on Requests for managers and on the Dashboard for bosses
 function AdminHome() {
   const { user } = useAuth();
   return (
     <Navigate
-      to={user.role === "manager" ? "/admin/orders" : "/admin/dashboard"}
+      to={user.role === "manager" ? "/admin/requests" : "/admin/dashboard"}
       replace
     />
   );
@@ -85,6 +86,7 @@ export default function App() {
         }
       >
         <Route index element={<AdminHome />} />
+        <Route path="requests" element={<RequestsTab />} />
         <Route
           path="dashboard"
           element={

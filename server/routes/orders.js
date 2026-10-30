@@ -359,6 +359,87 @@ router.get("/stats", ...boss, async (req, res) => {
   res.json(rows);
 });
 
+// Staff: payment requests waiting for a check, plus the print queue size
+// Staff: payment requests waiting for a check, unpaid orders, and the print queue size
+router.get("/requests", ...staff, async (req, res) => {
+  const [requests, unpaid, queued] = await Promise.all([
+    Order.find({ status: "awaiting_confirmation" }).sort({ updatedAt: 1 }),
+    Order.find({ status: "awaiting_payment" }).sort({ createdAt: 1 }).limit(50),
+    Order.countDocuments({
+      status: { $in: ["queued", "printing", "printed", "print_failed"] },
+    }),
+  ]);
+  res.json({ requests, unpaid, queued });
+});
+
+// Staff: confirm a payment (the first click wins)
+router.post("/:id/confirm", ...staff, async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const method = ["cash", "upi"].includes(req.body.method)
+      ? req.body.method
+      : order.paymentMethod || "cash";
+    const now = new Date();
+
+    const updated = await Order.findOneAndUpdate(
+      {
+        _id: order._id,
+        paid: false,
+        status: { $in: ["awaiting_payment", "awaiting_confirmation"] },
+      },
+      {
+        $set: {
+          paid: true,
+          paymentMethod: method,
+          paymentConfirmedAt: now,
+          paymentConfirmedBy: req.user.username,
+          status: "queued",
+          queuedAt: now,
+          printError: "",
+        },
+        $unset: { expiresAt: "" },
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(409).json({ error: "Someone else already handled this order" });
+    }
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Staff: reject a payment (the first click wins), and delete the file
+router.post("/:id/reject", ...staff, async (req, res) => {
+  try {
+    const reason = String(req.body.reason || "").trim().slice(0, 200);
+
+    const updated = await Order.findOneAndUpdate(
+      {
+        _id: req.params.id,
+        paid: false,
+        status: { $in: ["awaiting_payment", "awaiting_confirmation"] },
+      },
+      { $set: { status: "rejected", rejectReason: reason }, $unset: { expiresAt: "" } },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(409).json({ error: "Order not found, or someone already handled it" });
+    }
+
+    await removeOrderFile(updated);
+    await updated.save();
+    res.json(updated);
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // Staff: temporary link to the order's file
 router.get("/:id/file", ...staff, async (req, res) => {
   const order = await Order.findById(req.params.id);

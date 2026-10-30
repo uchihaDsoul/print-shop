@@ -45,3 +45,9 @@ export const updatePricing = (data) =>
 export const getShopSettings = () => call("/settings/shop");
 export const updateShopSettings = (data) =>
   call("/settings/shop", body("PUT", data));
+
+export const getRequests = () => call("/orders/requests");
+export const confirmPayment = (id, method) =>
+  call(`/orders/${id}/confirm`, body("POST", { method }));
+export const rejectPayment = (id, reason) =>
+  call(`/orders/${id}/reject`, body("POST", { reason }));
