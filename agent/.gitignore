@@ -2,3 +2,4 @@ config.json
 logs/
 tmp/
 node_modules/
+tools/
