@@ -33,18 +33,26 @@ function fail(message) {
   process.exit(1);
 }
 
-if (!printer) fail('Missing --printer, for example --printer "Brother DCP-T436W"');
+if (!printer)
+  fail('Missing --printer, for example --printer "Brother DCP-T436W"');
 if (!file) fail("Missing --file, for example --file test.pdf");
 if (!fs.existsSync(file)) fail("File not found: " + file);
-if (path.extname(file).toLowerCase() !== ".pdf") fail("Only PDF files for now.");
-if (!(copies >= 1 && copies <= 99)) fail("--copies must be a number from 1 to 99");
-if (color !== "bw" && color !== "color") fail('--color must be "bw" or "color"');
+const ext = path.extname(file).toLowerCase();
+if (![".pdf", ".jpg", ".jpeg", ".png"].includes(ext))
+  fail("Only PDF, JPG or PNG files.");
+const isImage = ext !== ".pdf";
+if (isImage && args.pages) fail("--pages does not apply to images.");
+if (!(copies >= 1 && copies <= 99))
+  fail("--copies must be a number from 1 to 99");
+if (color !== "bw" && color !== "color")
+  fail('--color must be "bw" or "color"');
 if (pages && !/^\d+(-\d+)?(,\d+(-\d+)?)*$/.test(pages)) {
   fail('--pages looks wrong. Use something like "1-5,8"');
 }
 
 const sumatra = path.join(__dirname, "tools", "SumatraPDF.exe");
-if (!fs.existsSync(sumatra)) fail("SumatraPDF.exe not found in the tools folder.");
+if (!fs.existsSync(sumatra))
+  fail("SumatraPDF.exe not found in the tools folder.");
 
 // 3. Build the print settings text for SumatraPDF
 const settings = [];
@@ -55,7 +63,14 @@ settings.push("simplex"); // one-sided
 settings.push("paper=A4");
 const settingsText = settings.join(",");
 
-const sumatraArgs = ["-print-to", printer, "-print-settings", settingsText, "-silent", file];
+const sumatraArgs = [
+  "-print-to",
+  printer,
+  "-print-settings",
+  settingsText,
+  "-silent",
+  file,
+];
 
 console.log("Printer  :", printer);
 console.log("File     :", file);
@@ -72,5 +87,7 @@ execFile(sumatra, sumatraArgs, { timeout: 60000 }, (error) => {
     console.error("Print command failed:", error.message);
     process.exit(1);
   }
-  console.log("Job accepted by Windows. Check the paper to be sure it printed.");
+  console.log(
+    "Job accepted by Windows. Check the paper to be sure it printed.",
+  );
 });
