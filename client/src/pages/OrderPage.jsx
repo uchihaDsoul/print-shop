@@ -3,6 +3,7 @@ import { getQuote, placeOrder, countPages, trackOrder } from "../api";
 import PriceList from "../components/PriceList";
 import ShopInfo from "../components/ShopInfo";
 import PaymentPanel from "../components/PaymentPanel";
+import PhotoOrder from "../components/PhotoOrder";
 import Modal from "../components/Modal";
 import useRates from "../useRates";
 import { statusLabel } from "../statusMeta";
@@ -38,6 +39,7 @@ export default function OrderPage() {
   const rates = useRates();
   const sizes = rates?.enabledSizes || ["A4"];
 
+  const [mode, setMode] = useState("paper"); // "paper" or "photo"
   const [form, setForm] = useState(initialForm);
   const [file, setFile] = useState(null);
   const [fileKey, setFileKey] = useState(0); // changing this empties the file input
@@ -127,19 +129,24 @@ export default function OrderPage() {
     return () => clearInterval(timer);
   }, [placed?.trackingCode, placed?.status]);
 
+  // shared by paper orders and photo orders: show the order and open the payment popup
+  function openPayment(order) {
+    setPlaced(order);
+    try {
+      localStorage.setItem("lastTrack", order.trackingCode);
+    } catch {
+      /* storage may be blocked, which is fine */
+    }
+    setShowPay(true);
+  }
+
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
       const order = await placeOrder(form, file);
-      setPlaced(order);
-      try {
-        localStorage.setItem("lastTrack", order.trackingCode);
-      } catch {
-        /* storage may be blocked, which is fine */
-      }
-      setShowPay(true); // open the payment popup
+      openPayment(order);
       setForm(initialForm);
       setFile(null);
       setFileKey((k) => k + 1);
@@ -156,10 +163,7 @@ export default function OrderPage() {
   function closeModal() {
     setShowPay(false);
     // finished orders don't need the banner any more
-    if (
-      placed &&
-      ["collected", "rejected", "cancelled"].includes(placed.status)
-    ) {
+    if (placed && ["collected", "rejected", "cancelled"].includes(placed.status)) {
       setPlaced(null);
     }
   }
@@ -185,19 +189,11 @@ export default function OrderPage() {
             </div>
           </div>
           <div className="actions">
-            <button
-              type="button"
-              className="small"
-              onClick={() => setShowPay(true)}
-            >
+            <button type="button" className="small" onClick={() => setShowPay(true)}>
               {paying ? "Pay now" : "View"}
             </button>
             {!paying && (
-              <button
-                type="button"
-                className="small ghost"
-                onClick={() => setPlaced(null)}
-              >
+              <button type="button" className="small ghost" onClick={() => setPlaced(null)}>
                 Dismiss
               </button>
             )}
@@ -205,173 +201,183 @@ export default function OrderPage() {
         </div>
       )}
 
-      <form className="card" onSubmit={handleSubmit}>
-        <h3>1. Your details</h3>
-        <div className="row">
-          <label>
-            Your name
-            <input
-              name="customerName"
-              value={form.customerName}
-              onChange={handleChange}
-              required
-            />
-          </label>
-          <label>
-            Phone number
-            <input
-              name="phone"
-              value={form.phone}
-              onChange={handleChange}
-              required
-              inputMode="numeric"
-              pattern="[0-9]{10}"
-              title="Enter a 10-digit phone number"
-            />
-          </label>
+      {/* what are we printing? */}
+      <div className="card">
+        <h3>What would you like to print?</h3>
+        <div className="choice-grid">
+          <button
+            type="button"
+            className={"choice" + (mode === "paper" ? " on" : "")}
+            onClick={() => setMode("paper")}
+          >
+            Paper print
+            <small>Documents, PDFs, notes and images</small>
+          </button>
+          <button
+            type="button"
+            className={"choice" + (mode === "photo" ? " on" : "")}
+            onClick={() => setMode("photo")}
+          >
+            Photo print
+            <small>Full A4 photos and passport photos</small>
+          </button>
         </div>
+      </div>
 
-        <h3>2. Your file</h3>
-        <label>
-          PDF, JPG or PNG (max 20 MB)
-          <input
-            key={fileKey}
-            type="file"
-            accept=".pdf,.jpg,.jpeg,.png"
-            onChange={handleFile}
-            required
-          />
-        </label>
-        {counting && <p className="note">Reading your file...</p>}
-        {file && (
-          <p className="note">
-            ✓ {file.name}: <strong>{form.pages}</strong> page(s) found
-          </p>
-        )}
+      {mode === "photo" && <PhotoOrder onPlaced={openPayment} />}
 
-        {file && (
+      {mode === "paper" && (
+        <form className="card" onSubmit={handleSubmit}>
+          <h3>1. Your details</h3>
+          <div className="row">
+            <label>
+              Your name
+              <input
+                name="customerName"
+                value={form.customerName}
+                onChange={handleChange}
+                required
+              />
+            </label>
+            <label>
+              Phone number
+              <input
+                name="phone"
+                value={form.phone}
+                onChange={handleChange}
+                required
+                inputMode="numeric"
+                pattern="[0-9]{10}"
+                title="Enter a 10-digit phone number"
+              />
+            </label>
+          </div>
+
+          <h3>2. Your file</h3>
           <label>
-            Pages to print (optional)
+            PDF, JPG or PNG (max 20 MB)
             <input
-              name="pageRange"
-              value={form.pageRange}
-              onChange={handleChange}
-              placeholder="e.g. 1-5, 8, 10-12 (blank = all pages)"
-            />
-          </label>
-        )}
-        {rangeError && <p className="error">{rangeError}</p>}
-        {file && !rangeError && (
-          <p className="note">
-            Printing <strong>{printPages}</strong> of {form.pages} page(s)
-          </p>
-        )}
-
-        <h3>3. Print options</h3>
-        <div className="row">
-          <label>
-            Copies
-            <input
-              type="number"
-              min="1"
-              name="copies"
-              value={form.copies}
-              onChange={handleChange}
+              key={fileKey}
+              type="file"
+              accept=".pdf,.jpg,.jpeg,.png"
+              onChange={handleFile}
               required
             />
           </label>
-          {sizes.length > 1 && (
+          {counting && <p className="note">Reading your file...</p>}
+          {file && (
+            <p className="note">
+              ✓ {file.name}: <strong>{form.pages}</strong> page(s) found
+            </p>
+          )}
+
+          {file && (
             <label>
-              Paper size
-              <select name="size" value={form.size} onChange={handleChange}>
-                {sizes.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
+              Pages to print (optional)
+              <input
+                name="pageRange"
+                value={form.pageRange}
+                onChange={handleChange}
+                placeholder="e.g. 1-5, 8, 10-12 (blank = all pages)"
+              />
             </label>
           )}
-        </div>
+          {rangeError && <p className="error">{rangeError}</p>}
+          {file && !rangeError && (
+            <p className="note">
+              Printing <strong>{printPages}</strong> of {form.pages} page(s)
+            </p>
+          )}
 
-        <label className="check">
-          <input
-            type="checkbox"
-            name="color"
-            checked={form.color}
-            onChange={handleChange}
-          />
-          Color print
-        </label>
- 
+          <h3>3. Print options</h3>
+          <div className="row">
+            <label>
+              Copies
+              <input
+                type="number"
+                min="1"
+                name="copies"
+                value={form.copies}
+                onChange={handleChange}
+                required
+              />
+            </label>
+            {sizes.length > 1 && (
+              <label>
+                Paper size
+                <select name="size" value={form.size} onChange={handleChange}>
+                  {sizes.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+          </div>
 
-        <h3>4. Finishing</h3>
-        <label className="check">
-          <input
-            type="checkbox"
-            name="stapling"
-            checked={form.stapling}
-            onChange={handleChange}
-          />
-          Stapling
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            name="binding"
-            checked={form.binding}
-            onChange={handleChange}
-          />
-          Spiral binding
-        </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            name="urgent"
-            checked={form.urgent}
-            onChange={handleChange}
-          />
-          Urgent (priority printing)
-        </label>
-        <label>
-          Note for the shop (optional)
-          <textarea
-            name="note"
-            value={form.note}
-            onChange={handleChange}
-            maxLength={300}
-            rows={3}
-            placeholder="e.g. Staple top-left, use thick paper"
-          />
-        </label>
+          <label className="check">
+            <input type="checkbox" name="color" checked={form.color} onChange={handleChange} />
+            Color print
+          </label>
 
-        <div className="price">
-          <span>Estimated price</span>
-          <strong>₹{price}</strong>
-        </div>
+          <h3>4. Finishing</h3>
+          <label className="check">
+            <input
+              type="checkbox"
+              name="stapling"
+              checked={form.stapling}
+              onChange={handleChange}
+            />
+            Stapling
+          </label>
+          <label className="check">
+            <input
+              type="checkbox"
+              name="binding"
+              checked={form.binding}
+              onChange={handleChange}
+            />
+            Spiral binding
+          </label>
+          <label className="check">
+            <input type="checkbox" name="urgent" checked={form.urgent} onChange={handleChange} />
+            Urgent (priority printing)
+          </label>
+          <label>
+            Note for the shop (optional)
+            <textarea
+              name="note"
+              value={form.note}
+              onChange={handleChange}
+              maxLength={300}
+              rows={3}
+              placeholder="e.g. Staple top-left, use thick paper"
+            />
+          </label>
 
-        <p className="note">
-          🔒 Your file is deleted after you collect your prints.
-        </p>
-        {error && <p className="error">{error}</p>}
+          <div className="price">
+            <span>Estimated price</span>
+            <strong>₹{price}</strong>
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading || counting || !file || Boolean(rangeError)}
-        >
-          {loading ? "Placing order..." : "Place order"}
-        </button>
-      </form>
+          <p className="note">🔒 Your file is deleted after you collect your prints.</p>
+          {error && <p className="error">{error}</p>}
+
+          <button
+            type="submit"
+            disabled={loading || counting || !file || Boolean(rangeError)}
+          >
+            {loading ? "Placing order..." : "Place order"}
+          </button>
+        </form>
+      )}
 
       <PriceList />
       <ShopInfo />
 
       {/* payment popup */}
-      <Modal
-        open={Boolean(placed) && showPay}
-        onClose={closeModal}
-        title="Payment"
-      >
+      <Modal open={Boolean(placed) && showPay} onClose={closeModal} title="Payment">
         {placed && (
           <div className="modal-body">
             {paying ? (
@@ -404,9 +410,8 @@ export default function OrderPage() {
 
             {paying ? (
               <p className="note">
-                Your order is saved. If you close this window, tap{" "}
-                <strong>Pay now</strong> on the page, or pay later from Track
-                order with this code.
+                Your order is saved. If you close this window, tap <strong>Pay now</strong> on
+                the page, or pay later from Track order with this code.
               </p>
             ) : (
               <button type="button" className="ghost" onClick={closeModal}>

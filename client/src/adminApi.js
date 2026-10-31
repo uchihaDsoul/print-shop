@@ -71,3 +71,12 @@ export const setOrderStatus = (id, status) =>
   call(`/orders/${id}`, body("PATCH", { status }));
 export const printNow = (id) =>
   call(`/orders/${id}/printnow`, { method: "POST" });
+
+export const createPhotoWalkin = (fields, files) => {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    fd.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+  });
+  files.forEach((f) => fd.append("photos", f));
+  return call("/photo-orders/walkin", { method: "POST", body: fd }, true);
+};
