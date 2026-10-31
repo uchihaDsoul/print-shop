@@ -1477,3 +1477,31 @@ button.linklike:hover:not(:disabled) {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---------- Photo rows ---------- */
+.photo-row {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+}
+.photo-thumb {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  background: #fff;
+  border-radius: 12px;
+}
+.photo-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.photo-info .tag { align-self: flex-start; }
+.photo-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 560px) {
+  .photo-row { grid-template-columns: 64px 1fr; }
+  .photo-thumb { width: 64px; height: 64px; }
+  .photo-row > button { grid-column: 1 / -1; justify-self: start; }
+}

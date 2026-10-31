@@ -50,7 +50,9 @@ export default function OrderPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [placed, setPlaced] = useState(null); // the order that was just created
+  const [orderCode, setOrderCode] = useState(""); // the tracking code, kept safe separately
   const [showPay, setShowPay] = useState(false); // is the payment popup open?
+  const [copied, setCopied] = useState(false);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -115,6 +117,15 @@ export default function OrderPage() {
     form.urgent,
   ]);
 
+  // merge an update into the open order, and never lose the tracking code
+  function updatePlaced(next) {
+    setPlaced((prev) => ({
+      ...prev,
+      ...next,
+      trackingCode: next?.trackingCode || prev?.trackingCode,
+    }));
+  }
+
   // after payment is sent, follow the order's status so the screen updates by itself
   useEffect(() => {
     if (!placed) return;
@@ -122,18 +133,19 @@ export default function OrderPage() {
 
     const timer = setInterval(() => {
       if (document.hidden) return;
-      trackOrder(placed.trackingCode)
-        .then(setPlaced)
+      trackOrder(placed.trackingCode || orderCode)
+        .then(updatePlaced)
         .catch(() => {});
     }, 20000);
     return () => clearInterval(timer);
-  }, [placed?.trackingCode, placed?.status]);
+  }, [placed?.trackingCode, placed?.status, orderCode]);
 
   // shared by paper orders and photo orders: show the order and open the payment popup
   function openPayment(order) {
+    setOrderCode(order?.trackingCode || "");
     setPlaced(order);
     try {
-      localStorage.setItem("lastTrack", order.trackingCode);
+      if (order?.trackingCode) localStorage.setItem("lastTrack", order.trackingCode);
     } catch {
       /* storage may be blocked, which is fine */
     }
@@ -165,9 +177,21 @@ export default function OrderPage() {
     // finished orders don't need the banner any more
     if (placed && ["collected", "rejected", "cancelled"].includes(placed.status)) {
       setPlaced(null);
+      setOrderCode("");
     }
   }
 
+  async function copyCode(code) {
+    try {
+      await navigator.clipboard.writeText(code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* some browsers block copying */
+    }
+  }
+
+  const shownCode = placed?.trackingCode || orderCode;
   const paying = placed?.status === "awaiting_payment";
 
   return (
@@ -181,7 +205,7 @@ export default function OrderPage() {
       {placed && !showPay && (
         <div className="card pending-order">
           <div>
-            <strong>Order {placed.trackingCode}</strong>
+            <strong>Order {shownCode}</strong>
             <div className="note">
               {paying
                 ? "Waiting for your payment"
@@ -193,7 +217,14 @@ export default function OrderPage() {
               {paying ? "Pay now" : "View"}
             </button>
             {!paying && (
-              <button type="button" className="small ghost" onClick={() => setPlaced(null)}>
+              <button
+                type="button"
+                className="small ghost"
+                onClick={() => {
+                  setPlaced(null);
+                  setOrderCode("");
+                }}
+              >
                 Dismiss
               </button>
             )}
@@ -400,13 +431,33 @@ export default function OrderPage() {
             )}
 
             <p className="note">Your tracking code:</p>
-            <p className="code">{placed.trackingCode}</p>
+            {shownCode ? (
+              <>
+                <p className="code">{shownCode}</p>
+                <button type="button" className="small ghost" onClick={() => copyCode(shownCode)}>
+                  {copied ? "Copied" : "Copy code"}
+                </button>
+              </>
+            ) : (
+              <p className="error">
+                The tracking code didn't arrive. Please tell the shop. They can find your order on
+                their Orders page.
+              </p>
+            )}
+
+            {placed.warnings?.length > 0 && (
+              <div className="order-note">
+                {placed.warnings.map((w) => (
+                  <div key={w}>⚠ {w}</div>
+                ))}
+              </div>
+            )}
 
             {placed.status === "rejected" && placed.rejectReason && (
               <p className="error">{placed.rejectReason}</p>
             )}
 
-            <PaymentPanel order={placed} onUpdate={setPlaced} />
+            <PaymentPanel order={{ ...placed, trackingCode: shownCode }} onUpdate={updatePlaced} />
 
             {paying ? (
               <p className="note">

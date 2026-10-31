@@ -179,7 +179,16 @@ export default function TrackPage() {
 
           {order.source === "online" &&
             ["awaiting_payment", "awaiting_confirmation"].includes(order.status) && (
-              <PaymentPanel order={order} onUpdate={setOrder} />
+              <PaymentPanel
+                order={order}
+                onUpdate={(next) =>
+                  setOrder((prev) => ({
+                    ...prev,
+                    ...next,
+                    trackingCode: next?.trackingCode || prev?.trackingCode,
+                  }))
+                }
+              />
             )}
 
           {closed && (
