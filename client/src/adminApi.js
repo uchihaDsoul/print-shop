@@ -80,3 +80,7 @@ export const createPhotoWalkin = (fields, files) => {
   files.forEach((f) => fd.append("photos", f));
   return call("/photo-orders/walkin", { method: "POST", body: fd }, true);
 };
+
+export const getPaper = () => call("/paper");
+export const setPaper = (paper, passportPaper) =>
+  call("/paper/loaded", body("POST", { paper, passportPaper }));

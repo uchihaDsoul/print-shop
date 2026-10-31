@@ -38,6 +38,17 @@ function makeTrackingCode() {
 
 // Deletes the order's file from Cloudinary (the caller saves the order)
 async function removeOrderFile(order) {
+  // the customer's kept passport photo is deleted with the order
+  if (order.passportSourceId) {
+    try {
+      await deleteFile(order.passportSourceId, order.passportSourceType);
+      order.passportSourceId = "";
+      order.passportSourceType = "";
+      order.passportSourceFormat = "";
+    } catch (e) {
+      console.error("Passport source delete failed:", e.message);
+    }
+  }
   if (!order.filePublicId) return;
   try {
     await deleteFile(order.filePublicId, order.fileResourceType);
