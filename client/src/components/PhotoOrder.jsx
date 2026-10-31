@@ -1,23 +1,45 @@
 import { useEffect, useRef, useState } from "react";
 import { getPhotoQuote, placePhotoOrder } from "../api";
-import { a4Dpi, dpiLevel, readImageSize, REFUSE_DPI, WARN_DPI } from "../photoMath";
+import {
+  A4_RATIO,
+  a4Dpi,
+  buildPreview,
+  cropGeometry,
+  dpiLevel,
+  readImageSize,
+  REFUSE_DPI,
+  WARN_DPI,
+  zoomKeepCenter,
+} from "../photoMath";
+import CropFrame from "./CropFrame";
 
 const MAX_PHOTOS = 10;
 const MAX_SHEETS = 60;
 const MAX_FILE = 20 * 1024 * 1024;
 const MAX_TOTAL = 60 * 1024 * 1024;
-const PAGE_ASPECT = 8.27 / 11.69; // A4 portrait, width / height
 
 let nextId = 1;
 
-// Share of the photo's edges that Fill mode cuts off (the photo is turned to portrait first)
-function cropPercent({ width, height }) {
-  const a = Math.min(width, height) / Math.max(width, height);
-  const visible = Math.min(a / PAGE_ASPECT, PAGE_ASPECT / a);
-  return Math.round((1 - visible) * 100);
+const mb = (bytes) => (bytes / 1048576).toFixed(1);
+
+// the photo's size after it is turned upright onto the portrait page
+const portrait = (p) =>
+  p.width > p.height ? { w: p.height, h: p.width } : { w: p.width, h: p.height };
+
+const dpiOf = (p) => a4Dpi({ width: p.width, height: p.height, fit: p.fit, zoom: p.zoom });
+
+// share of the photo that Fill mode cuts off
+function croppedPercent(p) {
+  if (p.fit === "fit") return 0;
+  const pr = portrait(p);
+  const g = cropGeometry(pr.w, pr.h, A4_RATIO, p.zoom, 0.5, 0.5);
+  return Math.round((1 - (g.bw * g.bh) / (pr.w * pr.h)) * 100);
 }
 
-const mb = (bytes) => (bytes / 1048576).toFixed(1);
+const revokeAll = (p) => {
+  URL.revokeObjectURL(p.url);
+  if (p.preview) URL.revokeObjectURL(p.preview.url);
+};
 
 // onPlaced(order) opens the payment popup on the order page
 export default function PhotoOrder({ onPlaced }) {
@@ -31,11 +53,12 @@ export default function PhotoOrder({ onPlaced }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inputKey, setInputKey] = useState(0); // changing this empties the file input
+  const [openId, setOpenId] = useState(null); // which photo's preview is open
 
-  // keeps the latest list so the cleanup below can release the thumbnails
+  // keeps the latest list so the cleanup below can release the pictures
   const photosRef = useRef([]);
   photosRef.current = photos;
-  useEffect(() => () => photosRef.current.forEach((p) => URL.revokeObjectURL(p.url)), []);
+  useEffect(() => () => photosRef.current.forEach(revokeAll), []);
 
   const sheets = photos.reduce((n, p) => n + p.copies, 0);
   const totalBytes = photos.reduce((n, p) => n + p.file.size, 0);
@@ -104,6 +127,10 @@ export default function PhotoOrder({ onPlaced }) {
           height: size.height,
           copies: 1,
           fit: "fill",
+          zoom: 1,
+          x: 0.5,
+          y: 0.5,
+          preview: null,
         });
         total += file.size;
         count += 1;
@@ -124,9 +151,10 @@ export default function PhotoOrder({ onPlaced }) {
   function removePhoto(id) {
     setPhotos((prev) => {
       const gone = prev.find((p) => p.id === id);
-      if (gone) URL.revokeObjectURL(gone.url);
+      if (gone) revokeAll(gone);
       return prev.filter((p) => p.id !== id);
     });
+    setOpenId((cur) => (cur === id ? null : cur));
   }
 
   function setCopies(id, value) {
@@ -134,7 +162,37 @@ export default function PhotoOrder({ onPlaced }) {
     updatePhoto(id, { copies: Number.isFinite(n) ? Math.min(20, Math.max(1, n)) : 1 });
   }
 
-  const levels = photos.map((p) => dpiLevel(a4Dpi({ ...p, zoom: 1 })));
+  function changeZoom(p, value) {
+    const zoom = Math.min(3, Math.max(1, Number(value)));
+    const pr = portrait(p);
+    const pos = zoomKeepCenter(pr.w, pr.h, A4_RATIO, p.zoom, zoom, p.x, p.y);
+    updatePhoto(p.id, { zoom, ...pos });
+  }
+
+  // opens or closes the framing preview (the small picture is made only when it is needed)
+  async function toggleEditor(p) {
+    if (openId === p.id) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(p.id);
+    if (p.preview) return;
+    try {
+      const preview = await buildPreview(p.file, { rotateLandscape: true });
+      setPhotos((prev) => {
+        if (!prev.some((x) => x.id === p.id)) {
+          URL.revokeObjectURL(preview.url); // the photo was removed while we worked
+          return prev;
+        }
+        return prev.map((x) => (x.id === p.id ? { ...x, preview } : x));
+      });
+    } catch (err) {
+      setError(err.message);
+      setOpenId(null);
+    }
+  }
+
+  const levels = photos.map((p) => dpiLevel(dpiOf(p)));
   const tooSmall = levels.includes("low");
   const tooManySheets = sheets > MAX_SHEETS;
 
@@ -143,7 +201,7 @@ export default function PhotoOrder({ onPlaced }) {
     setError("");
 
     if (photos.length === 0) return setError("Please add at least one photo.");
-    if (tooSmall) return setError("Remove the photos marked 'too small to print', or choose bigger ones.");
+    if (tooSmall) return setError("Remove the photos marked 'too small to print', or zoom out.");
     if (tooManySheets) return setError(`An order can have at most ${MAX_SHEETS} sheets.`);
 
     setLoading(true);
@@ -155,13 +213,20 @@ export default function PhotoOrder({ onPlaced }) {
           orderType: "photo_a4",
           color,
           note,
-          items: photos.map((p) => ({ copies: p.copies, fit: p.fit, zoom: 1, x: 0.5, y: 0.5 })),
+          items: photos.map((p) => ({
+            copies: p.copies,
+            fit: p.fit,
+            zoom: p.zoom,
+            x: p.x,
+            y: p.y,
+          })),
         },
         photos.map((p) => p.file)
       );
       onPlaced(order);
-      photos.forEach((p) => URL.revokeObjectURL(p.url));
+      photos.forEach(revokeAll);
       setPhotos([]);
+      setOpenId(null);
       setDetails({ customerName: "", phone: "" });
       setNote("");
       setPrice(0);
@@ -200,7 +265,7 @@ export default function PhotoOrder({ onPlaced }) {
             Use a plain, light background with your face straight ahead. The shop prints what you
             upload and can't promise that any office or embassy will accept it.
           </p>
-          <p className="note">The passport photo screen arrives in a later step.</p>
+          <p className="note">The passport photo screen arrives in the next step.</p>
         </>
       )}
 
@@ -244,9 +309,10 @@ export default function PhotoOrder({ onPlaced }) {
           {adding && <p className="note">Reading your photos...</p>}
 
           {photos.map((p, i) => {
-            const dpi = a4Dpi({ ...p, zoom: 1 });
+            const dpi = dpiOf(p);
             const level = levels[i];
-            const cropped = cropPercent(p);
+            const cropped = croppedPercent(p);
+            const pr = portrait(p);
             return (
               <div className="photo-row" key={p.id}>
                 <img className="photo-thumb" src={p.url} alt={`Photo ${i + 1}`} />
@@ -263,12 +329,15 @@ export default function PhotoOrder({ onPlaced }) {
                     <span className="tag">May look soft (about {Math.round(dpi)} DPI)</span>
                   )}
                   {level === "low" && (
-                    <span className="tag urgent">Too small to print (about {Math.round(dpi)} DPI)</span>
+                    <span className="tag urgent">
+                      Too small to print (about {Math.round(dpi)} DPI)
+                    </span>
                   )}
 
                   {level === "low" && (
                     <span className="note">
-                      This photo is below {REFUSE_DPI} DPI at A4 size. Please choose a larger photo.
+                      This is below {REFUSE_DPI} DPI at A4 size.{" "}
+                      {p.zoom > 1 ? "Zoom out, or " : ""}Choose a larger photo.
                     </span>
                   )}
                   {level === "soft" && (
@@ -278,13 +347,13 @@ export default function PhotoOrder({ onPlaced }) {
                   )}
                   {p.width > p.height && (
                     <span className="note">
-                      Landscape photo: it's turned sideways to fill the portrait page.
+                      Landscape photo: it's turned a quarter turn onto the portrait page.
                     </span>
                   )}
                   {p.fit === "fill" && cropped >= 5 && (
                     <span className="note">
-                      About {cropped}% of the edges will be cropped. Choose "Fit inside" to keep the
-                      whole photo.
+                      About {cropped}% of the photo is cropped. Choose "Fit inside" to keep all of
+                      it.
                     </span>
                   )}
 
@@ -310,10 +379,80 @@ export default function PhotoOrder({ onPlaced }) {
                       </select>
                     </label>
                   </div>
+
+                  <button
+                    type="button"
+                    className="small ghost"
+                    style={{ alignSelf: "flex-start" }}
+                    onClick={() => toggleEditor(p)}
+                  >
+                    {openId === p.id ? "Hide preview" : p.fit === "fill" ? "Adjust framing" : "Preview"}
+                  </button>
                 </div>
+
                 <button type="button" className="small ghost" onClick={() => removePhoto(p.id)}>
                   Remove
                 </button>
+
+                {openId === p.id && (
+                  <div className="photo-editor">
+                    {!p.preview ? (
+                      <p className="note">Preparing the preview...</p>
+                    ) : (
+                      <>
+                        <CropFrame
+                          src={p.preview.url}
+                          w={p.preview.w}
+                          h={p.preview.h}
+                          ratio={A4_RATIO}
+                          fit={p.fit}
+                          zoom={p.zoom}
+                          x={p.x}
+                          y={p.y}
+                          onMove={(pos) => updatePhoto(p.id, pos)}
+                          maxWidth={280}
+                        />
+                        <p className="note">
+                          {p.fit === "fit"
+                            ? "The whole photo is printed, with white margins."
+                            : "The frame is your A4 page. Drag the photo to choose what prints."}
+                        </p>
+
+                        {p.fit === "fill" && (
+                          <>
+                            <label>
+                              Zoom ({p.zoom.toFixed(2)}x)
+                              <input
+                                type="range"
+                                min="1"
+                                max="3"
+                                step="0.05"
+                                value={p.zoom}
+                                onChange={(e) => changeZoom(p, e.target.value)}
+                              />
+                            </label>
+                            {p.zoom > 1 && (
+                              <span className="note">
+                                Zooming in makes the photo less sharp. Now about {Math.round(dpi)}{" "}
+                                DPI.
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              className="small ghost"
+                              onClick={() => updatePhoto(p.id, { zoom: 1, x: 0.5, y: 0.5 })}
+                            >
+                              Reset framing
+                            </button>
+                          </>
+                        )}
+                        <span className="note">
+                          Original after turning upright: {pr.w} x {pr.h} px
+                        </span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}

@@ -26,15 +26,19 @@ async function loadOriented(buffer) {
   } catch {
     throw new Error("Could not read this photo. It may be damaged.");
   }
-  if (!["jpeg", "png"].includes(meta.format)) throw new Error("Only JPG and PNG photos are allowed");
+  if (!["jpeg", "png"].includes(meta.format))
+    throw new Error("Only JPG and PNG photos are allowed");
 
   let out;
   try {
-    out = await sharp(buffer, LIMIT).rotate().toBuffer({ resolveWithObject: true });
+    out = await sharp(buffer, LIMIT)
+      .rotate()
+      .toBuffer({ resolveWithObject: true });
   } catch {
     throw new Error("Could not read this photo. It may be damaged.");
   }
-  if (out.info.width < 50 || out.info.height < 50) throw new Error("This photo is too small");
+  if (out.info.width < 50 || out.info.height < 50)
+    throw new Error("This photo is too small");
   return { data: out.data, w: out.info.width, h: out.info.height };
 }
 
@@ -74,12 +78,16 @@ async function prepareA4Photo(buffer, item, index = 0) {
   }
   let dpi;
   if (item.fit === "fit") {
-    dpi = Math.min(w / A4_IN.w, h / A4_IN.h);
+    dpi = Math.max(w / A4_IN.w, h / A4_IN.h);
   } else {
-    dpi = cropBox(w, h, A4_PX.w / A4_PX.h, item.zoom, item.x, item.y).width / A4_IN.w;
+    dpi =
+      cropBox(w, h, A4_PX.w / A4_PX.h, item.zoom, item.x, item.y).width /
+      A4_IN.w;
   }
   if (dpi < MIN_DPI) {
-    throw new Error(`Photo ${index + 1} is too small to print on A4 (about ${Math.round(dpi)} DPI). Please use a larger photo.`);
+    throw new Error(
+      `Photo ${index + 1} is too small to print on A4 (about ${Math.round(dpi)} DPI). Please use a larger photo.`,
+    );
   }
   return { data, w, h, dpi, item };
 }
@@ -92,7 +100,14 @@ async function renderA4(p, quality) {
       .jpeg({ quality })
       .toBuffer();
   }
-  const box = cropBox(p.w, p.h, A4_PX.w / A4_PX.h, p.item.zoom, p.item.x, p.item.y);
+  const box = cropBox(
+    p.w,
+    p.h,
+    A4_PX.w / A4_PX.h,
+    p.item.zoom,
+    p.item.x,
+    p.item.y,
+  );
   return sharp(p.data)
     .extract(box)
     .resize(A4_PX.w, A4_PX.h)
@@ -115,13 +130,19 @@ async function buildA4Pdf(prepared) {
     const bytes = Buffer.from(await doc.save());
     if (bytes.length <= MAX_PDF_BYTES) return bytes;
   }
-  throw new Error("These photos are too large together. Please add fewer photos.");
+  throw new Error(
+    "These photos are too large together. Please add fewer photos.",
+  );
 }
 
 // ---------- Passport photos ----------
 
 // Crops the photo to the passport size at 300 DPI. Returns { jpeg, dpi }
-async function renderPassport(buffer, size, { zoom = 1, x = 0.5, y = 0.5 } = {}) {
+async function renderPassport(
+  buffer,
+  size,
+  { zoom = 1, x = 0.5, y = 0.5 } = {},
+) {
   const s = PASSPORT[size];
   if (!s) throw new Error("Unknown passport size");
   const base = await loadOriented(buffer);
@@ -130,7 +151,9 @@ async function renderPassport(buffer, size, { zoom = 1, x = 0.5, y = 0.5 } = {})
   const box = cropBox(base.w, base.h, tw / th, zoom, x, y);
   const dpi = box.width / (s.w / 25.4);
   if (dpi < MIN_DPI) {
-    throw new Error(`This photo is too small for a ${size} mm passport photo (about ${Math.round(dpi)} DPI). Please use a larger photo.`);
+    throw new Error(
+      `This photo is too small for a ${size} mm passport photo (about ${Math.round(dpi)} DPI). Please use a larger photo.`,
+    );
   }
   const jpeg = await sharp(base.data)
     .extract(box)
@@ -147,8 +170,14 @@ function capacity(paper, size) {
   const s = PASSPORT[size];
   if (!pp || !s) return { cols: 0, rows: 0, perSheet: 0 };
   const layout = (pw, ph, rotated) => {
-    const cols = Math.max(0, Math.floor((pp.w - 2 * MARGIN + GAP) / (pw + GAP)));
-    const rows = Math.max(0, Math.floor((pp.h - 2 * MARGIN + GAP) / (ph + GAP)));
+    const cols = Math.max(
+      0,
+      Math.floor((pp.w - 2 * MARGIN + GAP) / (pw + GAP)),
+    );
+    const rows = Math.max(
+      0,
+      Math.floor((pp.h - 2 * MARGIN + GAP) / (ph + GAP)),
+    );
     return { cols, rows, pw, ph, rotated, perSheet: cols * rows };
   };
   const a = layout(s.w, s.h, false);
@@ -157,12 +186,21 @@ function capacity(paper, size) {
 }
 
 // A printable sheet (PDF) with the passport photo repeated, with thin cut guides
-async function buildPassportSheet({ photoJpeg, size, paper, pieces, guides = true }) {
+async function buildPassportSheet({
+  photoJpeg,
+  size,
+  paper,
+  pieces,
+  guides = true,
+}) {
   const pp = PAPERS[paper];
   const cap = capacity(paper, size);
-  if (!pp || !cap.perSheet) throw new Error("This passport size does not fit on that paper");
+  if (!pp || !cap.perSheet)
+    throw new Error("This passport size does not fit on that paper");
 
-  const img = cap.rotated ? await sharp(photoJpeg).rotate(90).jpeg({ quality: 92 }).toBuffer() : photoJpeg;
+  const img = cap.rotated
+    ? await sharp(photoJpeg).rotate(90).jpeg({ quality: 92 }).toBuffer()
+    : photoJpeg;
   const doc = await PDFDocument.create();
   const emb = await doc.embedJpg(img);
 
@@ -183,8 +221,12 @@ async function buildPassportSheet({ photoJpeg, size, paper, pieces, guides = tru
       page.drawImage(emb, { x, y, width: cap.pw * MM, height: cap.ph * MM });
       if (guides) {
         page.drawRectangle({
-          x, y, width: cap.pw * MM, height: cap.ph * MM,
-          borderWidth: 0.3, borderColor: rgb(0.5, 0.5, 0.5),
+          x,
+          y,
+          width: cap.pw * MM,
+          height: cap.ph * MM,
+          borderWidth: 0.3,
+          borderColor: rgb(0.5, 0.5, 0.5),
         });
       }
     }
@@ -194,6 +236,13 @@ async function buildPassportSheet({ photoJpeg, size, paper, pieces, guides = tru
 }
 
 module.exports = {
-  MIN_DPI, WARN_DPI, PASSPORT, PAPERS,
-  prepareA4Photo, buildA4Pdf, renderPassport, capacity, buildPassportSheet,
+  MIN_DPI,
+  WARN_DPI,
+  PASSPORT,
+  PAPERS,
+  prepareA4Photo,
+  buildA4Pdf,
+  renderPassport,
+  capacity,
+  buildPassportSheet,
 };

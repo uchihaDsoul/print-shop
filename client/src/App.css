@@ -1505,3 +1505,34 @@ button.linklike:hover:not(:disabled) {
   .photo-thumb { width: 64px; height: 64px; }
   .photo-row > button { grid-column: 1 / -1; justify-self: start; }
 }
+
+/* ---------- Crop preview ---------- */
+.photo-editor {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.photo-editor label { width: 100%; max-width: 320px; }
+.crop-frame {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #fff;
+  border: 2px solid var(--primary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(31, 38, 135, 0.18);
+  touch-action: none; /* dragging inside the frame must not scroll the page */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.crop-frame.drag { cursor: grab; }
+.crop-frame.drag:active { cursor: grabbing; }
+.crop-frame:focus-visible { outline: 3px solid rgba(108, 63, 209, 0.35); outline-offset: 2px; }
+.crop-img { position: absolute; max-width: none; pointer-events: none; }
+.crop-fit { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+input[type="range"] { padding: 0; accent-color: var(--primary); }

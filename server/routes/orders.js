@@ -55,6 +55,7 @@ function publicOrder(o) {
   return {
     trackingCode: o.trackingCode,
     source: o.source,
+    orderType: o.orderType,
     status: o.status,
     price: o.price,
     paid: o.paid,
