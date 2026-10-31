@@ -1496,14 +1496,33 @@ button.linklike:hover:not(:disabled) {
   background: #fff;
   border-radius: 12px;
 }
-.photo-info { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.photo-info .tag { align-self: flex-start; }
-.photo-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.photo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.photo-info .tag {
+  align-self: flex-start;
+}
+.photo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 @media (max-width: 560px) {
-  .photo-row { grid-template-columns: 64px 1fr; }
-  .photo-thumb { width: 64px; height: 64px; }
-  .photo-row > button { grid-column: 1 / -1; justify-self: start; }
+  .photo-row {
+    grid-template-columns: 64px 1fr;
+  }
+  .photo-thumb {
+    width: 64px;
+    height: 64px;
+  }
+  .photo-row > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
 }
 
 /* ---------- Crop preview ---------- */
@@ -1516,7 +1535,10 @@ button.linklike:hover:not(:disabled) {
   padding-top: 12px;
   border-top: 1px solid var(--line);
 }
-.photo-editor label { width: 100%; max-width: 320px; }
+.photo-editor label {
+  width: 100%;
+  max-width: 320px;
+}
 .crop-frame {
   position: relative;
   width: 100%;
@@ -1530,9 +1552,59 @@ button.linklike:hover:not(:disabled) {
   user-select: none;
   -webkit-user-select: none;
 }
-.crop-frame.drag { cursor: grab; }
-.crop-frame.drag:active { cursor: grabbing; }
-.crop-frame:focus-visible { outline: 3px solid rgba(108, 63, 209, 0.35); outline-offset: 2px; }
-.crop-img { position: absolute; max-width: none; pointer-events: none; }
-.crop-fit { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-input[type="range"] { padding: 0; accent-color: var(--primary); }
+.crop-frame.drag {
+  cursor: grab;
+}
+.crop-frame.drag:active {
+  cursor: grabbing;
+}
+.crop-frame:focus-visible {
+  outline: 3px solid rgba(108, 63, 209, 0.35);
+  outline-offset: 2px;
+}
+.crop-img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+.crop-fit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+/* ---------- Photo forms and the passport face guide ---------- */
+.photo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.crop-wrap {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+}
+.crop-guide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* dragging goes through to the photo */
+}
+.crop-guide ellipse,
+.crop-guide line {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.75));
+}
