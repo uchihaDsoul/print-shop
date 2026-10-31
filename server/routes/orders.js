@@ -29,6 +29,9 @@ const trackLimiter = rateLimit({
 
 const toBool = (v) => v === true || v === "true" || v === "on";
 
+// Double-sided needs the manual flip card (Phase 5 Part A, parked). Switch to true when it is built.
+const DOUBLE_SIDED_AVAILABLE = false;
+
 function makeTrackingCode() {
   return crypto.randomBytes(5).toString("hex").toUpperCase(); // 10 characters
 }
@@ -127,6 +130,11 @@ async function createOrder(body, source, file, staffUser) {
       binding: toBool(body.binding),
       urgent: toBool(body.urgent),
     };
+
+    if (printOptions.doubleSided && !DOUBLE_SIDED_AVAILABLE) {
+      throw new Error("Double-sided printing is not available right now");
+    }
+
     const note = String(body.note || "").slice(0, 300);
     const price = calculatePrice({ ...printOptions, pages: range.count });
 
@@ -197,7 +205,7 @@ router.post("/quote", (req, res) => {
       copies,
       color: toBool(req.body.color),
       size: pickSize(req.body.size),
-      doubleSided: toBool(req.body.doubleSided),
+      doubleSided: DOUBLE_SIDED_AVAILABLE && toBool(req.body.doubleSided),
       stapling: toBool(req.body.stapling),
       binding: toBool(req.body.binding),
       urgent: toBool(req.body.urgent),

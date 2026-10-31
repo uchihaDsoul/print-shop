@@ -303,15 +303,7 @@ export default function OrderPage() {
           />
           Color print
         </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            name="doubleSided"
-            checked={form.doubleSided}
-            onChange={handleChange}
-          />
-          Double-sided
-        </label>
+ 
 
         <h3>4. Finishing</h3>
         <label className="check">

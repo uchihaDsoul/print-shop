@@ -10,6 +10,11 @@ const DEFAULTS = {
   },
   doubleSidedDiscountPercent: 10,
   extras: { stapling: 0, binding: 30, urgent: 20 },
+  // photo prints: A4 photo is per sheet, passport is per piece (placeholders, set real ones on the Pricing page)
+  photo: {
+    a4: { bw: 25, color: 40 },
+    passport: { bw: 8, color: 10 },
+  },
 };
 
 let current = JSON.parse(JSON.stringify(DEFAULTS));
@@ -28,10 +33,16 @@ function num(value, label, max = 100000) {
   return Math.round(n * 100) / 100;
 }
 
+// older saved prices have no photo section, so a missing value falls back to the default
+const orDefault = (value, fallback) => (value === undefined ? fallback : value);
+
 // Checks the input and returns a clean copy, or throws a friendly error
 function validatePricing(input) {
   const r = (input && input.rates) || {};
   const e = (input && input.extras) || {};
+  const p = (input && input.photo) || {};
+  const pa4 = p.a4 || {};
+  const pps = p.passport || {};
 
   // older saved prices have no enabledSizes, so fall back to the default
   const wanted = Array.isArray(input && input.enabledSizes)
@@ -62,6 +73,16 @@ function validatePricing(input) {
       stapling: num(e.stapling, "Stapling charge"),
       binding: num(e.binding, "Binding charge"),
       urgent: num(e.urgent, "Urgent charge"),
+    },
+    photo: {
+      a4: {
+        bw: num(orDefault(pa4.bw, DEFAULTS.photo.a4.bw), "A4 photo black and white price"),
+        color: num(orDefault(pa4.color, DEFAULTS.photo.a4.color), "A4 photo color price"),
+      },
+      passport: {
+        bw: num(orDefault(pps.bw, DEFAULTS.photo.passport.bw), "Passport black and white price"),
+        color: num(orDefault(pps.color, DEFAULTS.photo.passport.color), "Passport color price"),
+      },
     },
   };
 }
@@ -130,8 +151,22 @@ function calculatePrice({
   return Math.round(total);
 }
 
+// Full A4 photo: price per sheet (sheets = photos x copies)
+function calculateA4PhotoPrice({ sheets, color }) {
+  const perSheet = current.photo.a4[color ? "color" : "bw"];
+  return Math.round(sheets * perSheet);
+}
+
+// Passport photos: price per piece
+function calculatePassportPrice({ pieces, color }) {
+  const perPiece = current.photo.passport[color ? "color" : "bw"];
+  return Math.round(pieces * perPiece);
+}
+
 module.exports = {
   calculatePrice,
+  calculateA4PhotoPrice,
+  calculatePassportPrice,
   getPricing,
   loadPricing,
   savePricing,
