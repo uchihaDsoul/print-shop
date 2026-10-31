@@ -43,6 +43,8 @@ app.use("/api/agent", require("./routes/agent"));
 
 app.use("/api/agent/jobs", require("./routes/agentJobs"));
 
+app.use("/api/photo-orders", require("./routes/photoOrders"));
+
 const PORT = process.env.PORT || 5000;
 
 mongoose

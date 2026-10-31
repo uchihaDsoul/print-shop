@@ -14,6 +14,10 @@ const toForm = (d) => ({
   stapling: String(d.extras.stapling),
   binding: String(d.extras.binding),
   urgent: String(d.extras.urgent),
+  photoA4bw: String(((d.photo || {}).a4 || {}).bw ?? 25),
+  photoA4color: String(((d.photo || {}).a4 || {}).color ?? 40),
+  passportBw: String(((d.photo || {}).passport || {}).bw ?? 8),
+  passportColor: String(((d.photo || {}).passport || {}).color ?? 10),
 });
 
 // and back into the shape the server expects
@@ -25,6 +29,11 @@ const toPayload = (f) => ({
   },
   doubleSidedDiscountPercent: f.discount,
   extras: { stapling: f.stapling, binding: f.binding, urgent: f.urgent },
+
+  photo: {
+    a4: { bw: f.photoA4bw, color: f.photoA4color },
+    passport: { bw: f.passportBw, color: f.passportColor },
+  },
 });
 
 export default function PricingTab() {
@@ -157,6 +166,16 @@ export default function PricingTab() {
           {field("stapling", "Stapling, per copy")}
           {field("binding", "Spiral binding, per copy")}
           {field("urgent", "Urgent, per order")}
+        </div>
+
+        <h3>Photo prints (₹)</h3>
+        <div className="row">
+          {field("photoA4bw", "A4 photo, B/W (per sheet)")}
+          {field("photoA4color", "A4 photo, color (per sheet)")}
+        </div>
+        <div className="row">
+          {field("passportBw", "Passport photo, B/W (per piece)")}
+          {field("passportColor", "Passport photo, color (per piece)")}
         </div>
 
         {error && <p className="error">{error}</p>}

@@ -40,7 +40,7 @@ export const updateUser = (id, data) =>
 export const deleteUser = (id) => call(`/users/${id}`, { method: "DELETE" });
 export const getFileLink = (id) => call(`/orders/${id}/file`);
 export const updatePricing = (data) =>
-  call("/setting/pricing", body("PUT", data));
+   call("/settings/pricing", body("PUT", data));
 
 export const getShopSettings = () => call("/settings/shop");
 export const updateShopSettings = (data) =>
@@ -71,3 +71,12 @@ export const setOrderStatus = (id, status) =>
   call(`/orders/${id}`, body("PATCH", { status }));
 export const printNow = (id) =>
   call(`/orders/${id}/printnow`, { method: "POST" });
+
+export const createPhotoWalkin = (fields, files) => {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    fd.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+  });
+  files.forEach((f) => fd.append("photos", f));
+  return call("/photo-orders/walkin", { method: "POST", body: fd }, true);
+};

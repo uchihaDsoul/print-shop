@@ -218,15 +218,6 @@ export default function WalkinTab() {
           />
           Color
         </label>
-        <label className="check">
-          <input
-            type="checkbox"
-            name="doubleSided"
-            checked={form.doubleSided}
-            onChange={handleChange}
-          />
-          Double-sided
-        </label>
       </div>
 
       <div className="row">

@@ -1437,3 +1437,174 @@ button.linklike:hover:not(:disabled) {
   font-family: monospace;
   margin: 8px 0;
 }
+
+/* ---------- Choice cards (paper or photo, A4 or passport) ---------- */
+.choice-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.choice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 16px;
+  text-align: left;
+  font-weight: 700;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 18px;
+  box-shadow: none;
+}
+.choice small {
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+.choice:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: none;
+}
+.choice.on {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(108, 63, 209, 0.18);
+}
+@media (max-width: 480px) {
+  .choice-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Photo rows ---------- */
+.photo-row {
+  display: grid;
+  grid-template-columns: 84px 1fr auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+}
+.photo-thumb {
+  width: 84px;
+  height: 84px;
+  object-fit: cover;
+  background: #fff;
+  border-radius: 12px;
+}
+.photo-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.photo-info .tag {
+  align-self: flex-start;
+}
+.photo-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .photo-row {
+    grid-template-columns: 64px 1fr;
+  }
+  .photo-thumb {
+    width: 64px;
+    height: 64px;
+  }
+  .photo-row > button {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+}
+
+/* ---------- Crop preview ---------- */
+.photo-editor {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.photo-editor label {
+  width: 100%;
+  max-width: 320px;
+}
+.crop-frame {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+  overflow: hidden;
+  background: #fff;
+  border: 2px solid var(--primary);
+  border-radius: 6px;
+  box-shadow: 0 8px 24px rgba(31, 38, 135, 0.18);
+  touch-action: none; /* dragging inside the frame must not scroll the page */
+  user-select: none;
+  -webkit-user-select: none;
+}
+.crop-frame.drag {
+  cursor: grab;
+}
+.crop-frame.drag:active {
+  cursor: grabbing;
+}
+.crop-frame:focus-visible {
+  outline: 3px solid rgba(108, 63, 209, 0.35);
+  outline-offset: 2px;
+}
+.crop-img {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+}
+.crop-fit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+input[type="range"] {
+  padding: 0;
+  accent-color: var(--primary);
+}
+
+/* ---------- Photo forms and the passport face guide ---------- */
+.photo-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.crop-wrap {
+  position: relative;
+  width: 100%;
+  margin: 0 auto;
+}
+.crop-guide {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none; /* dragging goes through to the photo */
+}
+.crop-guide ellipse,
+.crop-guide line {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.95);
+  stroke-width: 1.6;
+  stroke-dasharray: 5 4;
+  vector-effect: non-scaling-stroke;
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.75));
+}

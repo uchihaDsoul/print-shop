@@ -49,3 +49,23 @@ export const atCounter = (code) =>
 
 export const cancelOrder = (code) =>
   request(`/track/${encodeURIComponent(code)}/cancel`, json("POST", {}));
+
+// ---------- photo orders ----------
+async function photoRequest(path, options = {}) {
+  const res = await fetch(`${API}/api/photo-orders${path}`, options);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "Something went wrong");
+  return data;
+}
+
+export const getPhotoQuote = (data) => photoRequest("/quote", json("POST", data));
+
+// fields: plain values (objects and lists are sent as JSON text), files: array of File
+export function placePhotoOrder(fields, files) {
+  const fd = new FormData();
+  Object.entries(fields).forEach(([key, value]) => {
+    fd.append(key, typeof value === "object" ? JSON.stringify(value) : String(value));
+  });
+  files.forEach((f) => fd.append("photos", f));
+  return photoRequest("/online", { method: "POST", body: fd });
+}
