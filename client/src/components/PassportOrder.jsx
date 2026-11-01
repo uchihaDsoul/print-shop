@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getPhotoQuote, placePhotoOrder } from "../api";
+import { createPhotoWalkin } from "../adminApi";
 import {
   buildPreview,
   dpiLevel,
@@ -24,7 +25,7 @@ const GUIDE = {
 const mb = (bytes) => (bytes / 1048576).toFixed(1);
 
 // onPlaced(order) opens the payment popup on the order page
-export default function PassportOrder({ onPlaced }) {
+export default function PassportOrder({ onPlaced, walkin = false }) {
   const [details, setDetails] = useState({ customerName: "", phone: "" });
   const [size, setSize] = useState("35x45");
   const [pic, setPic] = useState(null); // { file, width, height, preview: { url, w, h } }
@@ -39,6 +40,7 @@ export default function PassportOrder({ onPlaced }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [inputKey, setInputKey] = useState(0); // changing this empties the file input
+  const [payment, setPayment] = useState(""); // staff walk-in only
 
   // keeps the latest picture so the cleanup below can release it
   const picRef = useRef(null);
@@ -47,7 +49,7 @@ export default function PassportOrder({ onPlaced }) {
     () => () => {
       if (picRef.current) URL.revokeObjectURL(picRef.current.preview.url);
     },
-    []
+    [],
   );
 
   const spec = PASSPORT_SIZES[size];
@@ -64,7 +66,12 @@ export default function PassportOrder({ onPlaced }) {
     }
     let cancelled = false;
     const timer = setTimeout(() => {
-      getPhotoQuote({ orderType: "passport", pieces: count, passportSize: size, color })
+      getPhotoQuote({
+        orderType: "passport",
+        pieces: count,
+        passportSize: size,
+        color,
+      })
         .then((d) => {
           if (cancelled) return;
           setPrice(d.price || 0);
@@ -86,13 +93,14 @@ export default function PassportOrder({ onPlaced }) {
     setError("");
     if (/\.(heic|heif)$/i.test(chosen.name) || /hei[cf]/i.test(chosen.type)) {
       return setError(
-        "iPhone HEIC photos aren't supported yet. In Settings, Camera, Formats choose \"Most Compatible\", or save the photo as JPG."
+        'iPhone HEIC photos aren\'t supported yet. In Settings, Camera, Formats choose "Most Compatible", or save the photo as JPG.',
       );
     }
     if (!["image/jpeg", "image/png"].includes(chosen.type)) {
       return setError("Only JPG and PNG photos are allowed.");
     }
-    if (chosen.size > MAX_FILE) return setError("This photo is larger than 20 MB.");
+    if (chosen.size > MAX_FILE)
+      return setError("This photo is larger than 20 MB.");
 
     setReading(true);
     try {
@@ -100,7 +108,12 @@ export default function PassportOrder({ onPlaced }) {
       const preview = await buildPreview(chosen, { rotateLandscape: false });
       setPic((prev) => {
         if (prev) URL.revokeObjectURL(prev.preview.url);
-        return { file: chosen, width: dims.width, height: dims.height, preview };
+        return {
+          file: chosen,
+          width: dims.width,
+          height: dims.height,
+          preview,
+        };
       });
       setView({ zoom: 1, x: 0.5, y: 0.5 });
     } catch (err) {
@@ -123,11 +136,26 @@ export default function PassportOrder({ onPlaced }) {
 
   function changeZoom(value) {
     const zoom = Math.min(3, Math.max(1, Number(value)));
-    const pos = zoomKeepCenter(pic.preview.w, pic.preview.h, ratio, view.zoom, zoom, view.x, view.y);
+    const pos = zoomKeepCenter(
+      pic.preview.w,
+      pic.preview.h,
+      ratio,
+      view.zoom,
+      zoom,
+      view.x,
+      view.y,
+    );
     setView({ zoom, ...pos });
   }
 
-  const dpi = pic ? passportDpi({ width: pic.width, height: pic.height, size, zoom: view.zoom }) : 0;
+  const dpi = pic
+    ? passportDpi({
+        width: pic.width,
+        height: pic.height,
+        size,
+        zoom: view.zoom,
+      })
+    : 0;
   const level = pic ? dpiLevel(dpi) : "ok";
   const sheetsNeeded = cap.a4 && piecesOk ? Math.ceil(count / cap.a4) : 0;
   const g = GUIDE[size];
@@ -137,12 +165,19 @@ export default function PassportOrder({ onPlaced }) {
     setError("");
 
     if (!pic) return setError("Please add your photo.");
-    if (level === "low") return setError("This photo is too small. Zoom out, or choose a larger photo.");
-    if (!piecesOk) return setError(`Choose from 1 to ${MAX_PIECES} passport photos.`);
+    if (level === "low")
+      return setError(
+        "This photo is too small. Zoom out, or choose a larger photo.",
+      );
+    if (!piecesOk)
+      return setError(`Choose from 1 to ${MAX_PIECES} passport photos.`);
+
+    if (walkin && !payment) return setError("Choose how the customer paid.");
 
     setLoading(true);
     try {
-      const order = await placePhotoOrder(
+      const send = walkin ? createPhotoWalkin : placePhotoOrder;
+      const order = await send(
         {
           customerName: details.customerName.trim(),
           phone: details.phone,
@@ -151,17 +186,19 @@ export default function PassportOrder({ onPlaced }) {
           pieces: count,
           color,
           note,
+          ...(walkin ? { payment } : {}),
           zoom: view.zoom,
           x: view.x,
           y: view.y,
         },
-        [pic.file]
+        [pic.file],
       );
       onPlaced(order);
       removePic();
       setDetails({ customerName: "", phone: "" });
       setPieces("6");
       setNote("");
+      setPayment("");
       setPrice(0);
     } catch (err) {
       setError(err.message);
@@ -173,8 +210,9 @@ export default function PassportOrder({ onPlaced }) {
   return (
     <form className="photo-form" onSubmit={handleSubmit}>
       <p className="note">
-        Use a plain, light background with your face straight ahead. The shop prints what you
-        upload and can't promise that any office or embassy will accept it.
+        Use a plain, light background with your face straight ahead. The shop
+        prints what you upload and can't promise that any office or embassy will
+        accept it.
       </p>
 
       <h3>2. Photo size</h3>
@@ -188,7 +226,9 @@ export default function PassportOrder({ onPlaced }) {
           >
             {s.label}
             <small>
-              {key === "35x45" ? "A common passport and ID size." : "2 x 2 inch, used for some visas and passports."}
+              {key === "35x45"
+                ? "A common passport and ID size."
+                : "2 x 2 inch, used for some visas and passports."}
             </small>
           </button>
         ))}
@@ -200,7 +240,9 @@ export default function PassportOrder({ onPlaced }) {
           Your name
           <input
             value={details.customerName}
-            onChange={(e) => setDetails((d) => ({ ...d, customerName: e.target.value }))}
+            onChange={(e) =>
+              setDetails((d) => ({ ...d, customerName: e.target.value }))
+            }
             required
           />
         </label>
@@ -208,7 +250,9 @@ export default function PassportOrder({ onPlaced }) {
           Phone number
           <input
             value={details.phone}
-            onChange={(e) => setDetails((d) => ({ ...d, phone: e.target.value }))}
+            onChange={(e) =>
+              setDetails((d) => ({ ...d, phone: e.target.value }))
+            }
             required
             inputMode="numeric"
             pattern="[0-9]{10}"
@@ -247,7 +291,12 @@ export default function PassportOrder({ onPlaced }) {
               maxWidth={260}
             />
             {guide && (
-              <svg className="crop-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+              <svg
+                className="crop-guide"
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+                aria-hidden="true"
+              >
                 <ellipse cx="50" cy={g.cy} rx={g.rx} ry={g.ry} />
                 <line x1="50" y1="0" x2="50" y2="100" />
               </svg>
@@ -255,15 +304,21 @@ export default function PassportOrder({ onPlaced }) {
           </div>
 
           <p className="note">
-            The frame is one {spec.label} photo. Drag your photo so the face sits in the middle.
+            The frame is one {spec.label} photo. Drag your photo so the face
+            sits in the middle.
           </p>
 
           <label className="check" style={{ width: "100%", maxWidth: 320 }}>
-            <input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={guide}
+              onChange={(e) => setGuide(e.target.checked)}
+            />
             Show a rough face guide
           </label>
           <span className="note">
-            The guide is only a help. It isn't an official check of any country's rules.
+            The guide is only a help. It isn't an official check of any
+            country's rules.
           </span>
 
           <label>
@@ -279,22 +334,31 @@ export default function PassportOrder({ onPlaced }) {
           </label>
 
           {level === "ok" && <span className="tag online">Good quality</span>}
-          {level === "soft" && <span className="tag">May look soft (about {Math.round(dpi)} DPI)</span>}
+          {level === "soft" && (
+            <span className="tag">
+              May look soft (about {Math.round(dpi)} DPI)
+            </span>
+          )}
           {level === "low" && (
-            <span className="tag urgent">Too small to print (about {Math.round(dpi)} DPI)</span>
+            <span className="tag urgent">
+              Too small to print (about {Math.round(dpi)} DPI)
+            </span>
           )}
           {level === "soft" && (
-            <span className="note">Under {WARN_DPI} DPI at this size, so details may look blurry.</span>
+            <span className="note">
+              Under {WARN_DPI} DPI at this size, so details may look blurry.
+            </span>
           )}
           {level === "low" && (
             <span className="note">
-              Below {REFUSE_DPI} DPI at this size. {view.zoom > 1 ? "Zoom out, or " : ""}Choose a
-              larger photo.
+              Below {REFUSE_DPI} DPI at this size.{" "}
+              {view.zoom > 1 ? "Zoom out, or " : ""}Choose a larger photo.
             </span>
           )}
 
           <span className="note">
-            {pic.file.name} · {pic.width} x {pic.height} px · {mb(pic.file.size)} MB
+            {pic.file.name} · {pic.width} x {pic.height} px ·{" "}
+            {mb(pic.file.size)} MB
           </span>
 
           <div className="actions">
@@ -349,8 +413,10 @@ export default function PassportOrder({ onPlaced }) {
       </div>
       {cap.a4 > 0 && (
         <p className="note">
-          {cap.a4} photos fit on an A4 sheet, or {cap.p46} on a 4 x 6 inch sheet.
-          {sheetsNeeded > 0 && ` Your order needs about ${sheetsNeeded} A4 sheet(s).`}
+          {cap.a4} photos fit on an A4 sheet, or {cap.p46} on a 4 x 6 inch
+          sheet.
+          {sheetsNeeded > 0 &&
+            ` Your order needs about ${sheetsNeeded} A4 sheet(s).`}
         </p>
       )}
       {!piecesOk && pieces !== "" && (
@@ -359,7 +425,11 @@ export default function PassportOrder({ onPlaced }) {
 
       <h3>6. Print options</h3>
       <label className="check">
-        <input type="checkbox" checked={color} onChange={(e) => setColor(e.target.checked)} />
+        <input
+          type="checkbox"
+          checked={color}
+          onChange={(e) => setColor(e.target.checked)}
+        />
         Color print (untick for black and white)
       </label>
       <label>
@@ -373,20 +443,41 @@ export default function PassportOrder({ onPlaced }) {
         />
       </label>
 
+      {walkin && (
+        <label>
+          Payment
+          <select
+            value={payment}
+            onChange={(e) => setPayment(e.target.value)}
+            required
+          >
+            <option value="">Choose...</option>
+            <option value="cash">Cash received</option>
+            <option value="upi">UPI received</option>
+            <option value="none">Not paid yet</option>
+          </select>
+        </label>
+      )}
+
       <div className="price">
         <span>Estimated price</span>
         <strong>₹{price}</strong>
       </div>
 
       <p className="note">
-        Passport photos are printed in batches when the shop loads photo paper, so they can take a
-        little longer than paper prints. Fresh prints need a few minutes to dry. Keep them dry and
-        handle them by the edges.
+        Passport photos are printed in batches when the shop loads photo paper,
+        so they can take a little longer than paper prints. Fresh prints need a
+        few minutes to dry. Keep them dry and handle them by the edges.
       </p>
-      <p className="note">🔒 Your photo is deleted after you collect your prints.</p>
+      <p className="note">
+        🔒 Your photo is deleted after you collect your prints.
+      </p>
       {error && <p className="error">{error}</p>}
 
-      <button type="submit" disabled={loading || reading || !pic || level === "low" || !piecesOk}>
+      <button
+        type="submit"
+        disabled={loading || reading || !pic || level === "low" || !piecesOk}
+      >
         {loading ? "Uploading photo..." : "Place order"}
       </button>
     </form>
