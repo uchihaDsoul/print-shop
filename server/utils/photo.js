@@ -1,5 +1,6 @@
 const sharp = require("sharp");
 const { PDFDocument, rgb } = require("pdf-lib");
+const { getPricing } = require("./pricing");
 
 const LIMIT = { limitInputPixels: 100000000 }; // refuse absurdly large images
 const MIN_DPI = 75; // below this we refuse the photo
@@ -11,8 +12,17 @@ const A4_PX = { w: 2480, h: 3508 }; // A4 at 300 DPI
 const A4_IN = { w: 8.27, h: 11.69 };
 const A4_PT = { w: 595.28, h: 841.89 };
 
-const PASSPORT = { "35x45": { w: 35, h: 45 }, "51x51": { w: 51, h: 51 } };
-const PAPERS = { a4: { w: 210, h: 297 }, "4x6": { w: 101.6, h: 152.4 } };
+// Sizes and papers come from the saved prices (Pricing page). An old order may use a size that was
+// switched off later, so printing uses the full lists, and only new orders use the "enabled" list.
+const catalogue = (list, onlyEnabled) =>
+  Object.fromEntries(
+    Object.entries(list)
+      .filter(([, item]) => !onlyEnabled || item.enabled)
+      .map(([key, item]) => [key, { w: item.wMm, h: item.hMm }]),
+  );
+const allSizes = () => catalogue(getPricing().photoSizes);
+const enabledSizes = () => catalogue(getPricing().photoSizes, true);
+const allPapers = () => catalogue(getPricing().papers);
 const GAP = 3; // mm between passport photos
 const MARGIN = 5; // mm paper margin
 
@@ -143,7 +153,7 @@ async function renderPassport(
   size,
   { zoom = 1, x = 0.5, y = 0.5 } = {},
 ) {
-  const s = PASSPORT[size];
+  const s = allSizes()[size];
   if (!s) throw new Error("Unknown passport size");
   const base = await loadOriented(buffer);
   const tw = Math.round((s.w / 25.4) * 300);
@@ -166,8 +176,8 @@ async function renderPassport(
 
 // How many photos fit on one sheet of the chosen paper
 function capacity(paper, size) {
-  const pp = PAPERS[paper];
-  const s = PASSPORT[size];
+  const pp = allPapers()[paper];
+  const s = allSizes()[size];
   if (!pp || !s) return { cols: 0, rows: 0, perSheet: 0 };
   const layout = (pw, ph, rotated) => {
     const cols = Math.max(
@@ -193,7 +203,7 @@ async function buildPassportSheet({
   pieces,
   guides = true,
 }) {
-  const pp = PAPERS[paper];
+  const pp = allPapers()[paper];
   const cap = capacity(paper, size);
   if (!pp || !cap.perSheet)
     throw new Error("This passport size does not fit on that paper");
@@ -238,11 +248,18 @@ async function buildPassportSheet({
 module.exports = {
   MIN_DPI,
   WARN_DPI,
-  PASSPORT,
-  PAPERS,
   prepareA4Photo,
   buildA4Pdf,
   renderPassport,
   capacity,
   buildPassportSheet,
 };
+// New orders may only use sizes that are switched on
+Object.defineProperty(module.exports, "PASSPORT", {
+  enumerable: true,
+  get: enabledSizes,
+});
+Object.defineProperty(module.exports, "PAPERS", {
+  enumerable: true,
+  get: allPapers,
+});

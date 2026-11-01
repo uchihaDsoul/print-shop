@@ -84,3 +84,5 @@ export const createPhotoWalkin = (fields, files) => {
 export const getPaper = () => call("/paper");
 export const setPaper = (paper, passportPaper) =>
   call("/paper/loaded", body("POST", { paper, passportPaper }));
+
+export const getPricingAdmin = () => call("/settings/pricing");

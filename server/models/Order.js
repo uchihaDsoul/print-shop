@@ -76,7 +76,7 @@ const orderSchema = new mongoose.Schema(
       enum: ["document", "photo_a4", "passport"],
       default: "document",
     },
-    passportSize: { type: String, enum: ["", "35x45", "51x51"], default: "" },
+    passportSize: { type: String, enum: ["", "35x45", "35x35", "51x51", "25x35"], default: "" },
     passportPieces: { type: Number, default: 0 },
     passportPaper: { type: String, enum: ["", "a4", "4x6"], default: "" }, // chosen by staff when the paper is loaded (step 5.9)
     passportSourceId: { type: String, default: "" }, // the customer's cropped passport photo, kept until the order ends

@@ -190,7 +190,7 @@ async function preparePassport(body, files, color) {
       pages: 1,
       printPages: 1,
       copies: 1,
-      price: calculatePassportPrice({ pieces, color }),
+      price: calculatePassportPrice({ pieces, color, size }),
     },
   };
 }
@@ -256,7 +256,7 @@ router.post("/quote", (req, res) => {
       return res.json({ price: 0 });
     }
     return res.json({
-      price: calculatePassportPrice({ pieces, color }),
+      price: calculatePassportPrice({ pieces, color, size }),
       perSheetA4: photo.capacity("a4", size).perSheet,
       perSheet4x6: photo.capacity("4x6", size).perSheet,
     });
