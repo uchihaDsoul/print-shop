@@ -1608,3 +1608,34 @@ input[type="range"] {
   vector-effect: non-scaling-stroke;
   filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.75));
 }
+
+
+/* ---------- Passport sheet grid ---------- */
+.sheet-grid {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 18px;
+}
+.sheet-svg {
+  width: 100%;
+  max-width: 260px;
+  display: block;
+  border-radius: 4px;
+  box-shadow: var(--glass-shadow);
+}
+.sheet-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}

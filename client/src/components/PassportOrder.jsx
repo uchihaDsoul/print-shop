@@ -12,6 +12,7 @@ import {
   zoomKeepCenter,
 } from "../photoMath";
 import CropFrame from "./CropFrame";
+import SheetGrid from "./SheetGrid";
 
 const MAX_PIECES = 40;
 const MAX_FILE = 20 * 1024 * 1024;
@@ -411,14 +412,18 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
           </button>
         )}
       </div>
-      {cap.a4 > 0 && (
-        <p className="note">
-          {cap.a4} photos fit on an A4 sheet, or {cap.p46} on a 4 x 6 inch
-          sheet.
-          {sheetsNeeded > 0 &&
-            ` Your order needs about ${sheetsNeeded} A4 sheet(s).`}
-        </p>
+      
+      {piecesOk && (
+        <SheetGrid
+          pieces={count}
+          photoMm={{ w: spec.wMm, h: spec.hMm }}
+          preview={pic ? pic.preview : null}
+          view={view}
+          ratio={ratio}
+          onFill={(n) => setPieces(String(Math.min(MAX_PIECES, n)))}
+        />
       )}
+
       {!piecesOk && pieces !== "" && (
         <p className="error">Choose a whole number from 1 to {MAX_PIECES}.</p>
       )}
