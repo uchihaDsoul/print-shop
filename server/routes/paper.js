@@ -1,3 +1,4 @@
+const { getPricing } = require("../utils/pricing");
 const express = require("express");
 const Order = require("../models/Order");
 const photo = require("../utils/photo");
@@ -45,6 +46,11 @@ router.post("/loaded", ...staff, wrap(async (req, res) => {
   const paper = req.body.paper;
   if (!TYPES.includes(paper)) return res.status(400).json({ error: "Unknown paper type" });
   const passportPaper = req.body.passportPaper === "4x6" ? "4x6" : "a4";
+
+  const pricing = getPricing();
+  if (!pricing.papers[passportPaper] || !pricing.papers[passportPaper].enabled) {
+    return res.status(400).json({ error: `${passportPaper === "4x6" ? "4 x 6 inch" : "A4"} paper is not enabled. Turn it on in Pricing first.` });
+  }
 
   if (await Order.exists({ status: "printing" })) {
     return res.status(409).json({ error: "A job is printing right now. Wait until it finishes, then change the paper." });
