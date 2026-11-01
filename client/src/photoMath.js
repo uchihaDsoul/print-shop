@@ -7,7 +7,9 @@ const A4_H = 11.69;
 
 export const PASSPORT_SIZES = {
   "35x45": { label: "35 x 45 mm", wMm: 35, hMm: 45 },
+  "35x35": { label: "35 x 35 mm", wMm: 35, hMm: 35 },
   "51x51": { label: "51 x 51 mm (2 x 2 inch)", wMm: 51, hMm: 51 },
+  "25x35": { label: "25 x 35 mm (PAN card)", wMm: 25, hMm: 35 },
 };
 
 // Reads a photo's pixel size in the browser

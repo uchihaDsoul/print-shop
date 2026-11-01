@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getPhotoQuote, placePhotoOrder } from "../api";
+import { getPhotoQuote, placePhotoOrder, getRates } from "../api";
 import { createPhotoWalkin } from "../adminApi";
 import {
   buildPreview,
@@ -20,7 +20,16 @@ const MAX_FILE = 20 * 1024 * 1024;
 // A rough face guide, in percent of the frame. It is a help, not an official check.
 const GUIDE = {
   "35x45": { rx: 33, ry: 36, cy: 47 },
+  "35x35": { rx: 33, ry: 33, cy: 47 },
   "51x51": { rx: 22, ry: 30, cy: 47 },
+  "25x35": { rx: 30, ry: 36, cy: 47 },
+};
+
+const SIZE_HELP = {
+  "35x45": "A common passport and ID size.",
+  "35x35": "Used for some ID and OCI applications.",
+  "51x51": "2 x 2 inch, used for some visas and passports.",
+  "25x35": "PAN card size.",
 };
 
 const mb = (bytes) => (bytes / 1048576).toFixed(1);
@@ -43,6 +52,9 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
   const [inputKey, setInputKey] = useState(0); // changing this empties the file input
   const [payment, setPayment] = useState(""); // staff walk-in only
 
+  const [enabledSizes, setEnabledSizes] = useState(null); // null = still loading
+
+  // keeps the latest picture so the cleanup below can release it
   // keeps the latest picture so the cleanup below can release it
   const picRef = useRef(null);
   picRef.current = pic;
@@ -52,6 +64,30 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
     },
     [],
   );
+
+  useEffect(() => {
+    getRates()
+      .then((d) => {
+        const list = d.photoSizes
+          ? Object.entries(d.photoSizes)
+              .filter(([, s]) => s.enabled)
+              .map(([key]) => key)
+          : ["35x45", "51x51"];
+        setEnabledSizes(list);
+      })
+      .catch(() => setEnabledSizes(["35x45", "51x51"])); // safe fallback if the call fails
+  }, []);
+
+  // if the selected size becomes unavailable, switch to the first enabled one
+  useEffect(() => {
+    if (
+      enabledSizes &&
+      enabledSizes.length > 0 &&
+      !enabledSizes.includes(size)
+    ) {
+      chooseSize(enabledSizes[0]);
+    }
+  }, [enabledSizes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spec = PASSPORT_SIZES[size];
   const ratio = spec.wMm / spec.hMm;
@@ -217,22 +253,22 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
       </p>
 
       <h3>2. Photo size</h3>
+      {enabledSizes === null && <p className="note">Loading sizes...</p>}
       <div className="choice-grid">
-        {Object.entries(PASSPORT_SIZES).map(([key, s]) => (
-          <button
-            key={key}
-            type="button"
-            className={"choice" + (size === key ? " on" : "")}
-            onClick={() => chooseSize(key)}
-          >
-            {s.label}
-            <small>
-              {key === "35x45"
-                ? "A common passport and ID size."
-                : "2 x 2 inch, used for some visas and passports."}
-            </small>
-          </button>
-        ))}
+        {enabledSizes &&
+          Object.entries(PASSPORT_SIZES)
+            .filter(([key]) => enabledSizes.includes(key))
+            .map(([key, s]) => (
+              <button
+                key={key}
+                type="button"
+                className={"choice" + (size === key ? " on" : "")}
+                onClick={() => chooseSize(key)}
+              >
+                {s.label}
+                <small>{SIZE_HELP[key] || ""}</small>
+              </button>
+            ))}
       </div>
 
       <h3>3. Your details</h3>
@@ -412,7 +448,7 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
           </button>
         )}
       </div>
-      
+
       {piecesOk && (
         <SheetGrid
           pieces={count}
