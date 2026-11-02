@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { getPricingAdmin, updatePricing } from "../../adminApi";
 import { rupees } from "../../format";
 
-// turn the server data into form fields
 const toForm = (d) => ({
   A4bw: String(d.rates.A4.bw),
   A4color: String(d.rates.A4.color),
@@ -13,6 +12,8 @@ const toForm = (d) => ({
   stapling: String(d.extras.stapling),
   binding: String(d.extras.binding),
   urgent: String(d.extras.urgent),
+  idCardBw: String(d.idCardBw ?? 10),
+  idCardColor: String(d.idCardColor ?? 20),
   photoA4bw: String(d.photo.a4.bw),
   photoA4color: String(d.photo.a4.color),
   sizes: Object.fromEntries(
@@ -29,7 +30,6 @@ const toForm = (d) => ({
   ),
 });
 
-// and back into the shape the server expects
 const toPayload = (f) => ({
   enabledSizes: f.a3 ? ["A4", "A3"] : ["A4"],
   rates: {
@@ -38,13 +38,15 @@ const toPayload = (f) => ({
   },
   doubleSidedDiscountPercent: f.discount,
   extras: { stapling: f.stapling, binding: f.binding, urgent: f.urgent },
+  idCardBw: f.idCardBw,
+  idCardColor: f.idCardColor,
   photo: { a4: { bw: f.photoA4bw, color: f.photoA4color } },
   photoSizes: f.sizes,
   papers: f.papers,
 });
 
 export default function PricingTab() {
-  const [saved, setSaved] = useState(null); // last known server data
+  const [saved, setSaved] = useState(null);
   const [form, setForm] = useState(null);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -64,7 +66,6 @@ export default function PricingTab() {
     setForm((p) => ({ ...p, [name]: value }));
   }
 
-  // change one field of one row in the sizes or papers lists
   function setRow(group, key, field, value) {
     setMessage("");
     setForm((p) => ({
@@ -176,6 +177,12 @@ export default function PricingTab() {
           {field("stapling", "Stapling, per copy")}
           {field("binding", "Spiral binding, per copy")}
           {field("urgent", "Urgent, per order")}
+        </div>
+
+        <h3>Smart ID Card Layout Mode (₹ per sheet)</h3>
+        <div className="row">
+          {field("idCardBw", "Black & White ID Sheet")}
+          {field("idCardColor", "Color ID Sheet")}
         </div>
 
         <h3>Full A4 photo (₹ per sheet)</h3>

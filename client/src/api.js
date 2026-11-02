@@ -30,6 +30,12 @@ export const countPages = (file) => {
   return request("/pagecount", { method: "POST", body: fd });
 };
 
+export const countMultiplePages = (files) => {
+  const fd = new FormData();
+  files.forEach((f) => fd.append("files", f));
+  return request("/pagecount-multi", { method: "POST", body: fd });
+};
+
 export const placeOrder = (form, file) => {
   const fd = new FormData();
   Object.entries(form).forEach(([key, value]) => fd.append(key, value));
@@ -41,7 +47,7 @@ export const createWalkInOrder = (form, file) => {
   const fd = new FormData();
   Object.entries(form).forEach(([key, value]) => fd.append(key, value));
   if (file) fd.append("file", file);
-  return request("/walkin", { method: "POST", body: fd }, true); // marked as admin request
+  return request("/walkin", { method: "POST", body: fd }, true);
 };
 
 export const placeWalkInOrder = createWalkInOrder;
