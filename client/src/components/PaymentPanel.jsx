@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { submitUpi, atCounter } from "../api";
+import { submitUpi, atCounter, cancelOrder } from "../api";
 import QRCode from "react-qr-code";
 import { SHOP } from "../shopConfig";
 
@@ -28,11 +28,29 @@ export default function PaymentPanel({ order, onUpdate, settings }) {
     }
   }
 
+  async function handleCancel() {
+    if (!window.confirm("Are you sure you want to cancel this order?")) return;
+    setError("");
+    setSubmitting(true);
+    try {
+      const updated = await cancelOrder(order.trackingCode);
+      if (updated) onUpdate(updated);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   // Use toggles if provided, otherwise default to showing both
   const showCash = settings ? settings.guestShowCash : true;
   const showUPI = settings ? settings.guestShowUPI : true;
 
   if (order.status !== "awaiting_payment") return null;
+
+  const upiLink = `upi://pay?pa=${settings?.upiId || SHOP.upiId}&pn=${encodeURIComponent(
+    settings?.upiPayeeName || SHOP.name
+  )}&tr=${order.trackingCode}&am=${order.price}&cu=INR`;
 
   return (
     <div className="payment-panel">
@@ -41,7 +59,7 @@ export default function PaymentPanel({ order, onUpdate, settings }) {
           {showUPI && (
             <button type="button" onClick={() => setMethod("upi")}>
               Pay with UPI
-              <small>Scan a QR code</small>
+              <small>Scan QR or open app</small>
             </button>
           )}
           {showCash && (
@@ -53,6 +71,17 @@ export default function PaymentPanel({ order, onUpdate, settings }) {
           {!showUPI && !showCash && (
             <p className="note">No payment methods are currently available. Please see a manager.</p>
           )}
+          
+          {/* Cancel button right on the main payment choice screen */}
+          <button
+            type="button"
+            className="ghost small"
+            onClick={handleCancel}
+            disabled={submitting}
+            style={{ marginTop: "12px", width: "100%", color: "#ef4444", borderColor: "#ef4444" }}
+          >
+            Cancel this order
+          </button>
         </div>
       )}
 
@@ -75,6 +104,15 @@ export default function PaymentPanel({ order, onUpdate, settings }) {
               {submitting ? "Telling shop..." : "I'm at the counter"}
             </button>
           </div>
+          <button
+            type="button"
+            className="ghost small"
+            onClick={handleCancel}
+            disabled={submitting}
+            style={{ marginTop: "10px", width: "100%", color: "#ef4444" }}
+          >
+            Cancel order
+          </button>
           {error && <p className="error">{error}</p>}
         </div>
       )}
@@ -82,15 +120,29 @@ export default function PaymentPanel({ order, onUpdate, settings }) {
       {method === "upi" && (
         <form className="upi-flow" onSubmit={handleConfirm}>
           <div className="qr-wrap">
-            <QRCode
-              value={`upi://pay?pa=${settings?.upiId || SHOP.upiId}&pn=${encodeURIComponent(
-                settings?.upiPayeeName || SHOP.name
-              )}&tr=${order.trackingCode}&am=${order.price}&cu=INR`}
-              size={180}
-            />
+            <QRCode value={upiLink} size={180} />
           </div>
+
+          <a
+            href={upiLink}
+            className="small button"
+            style={{
+              display: "block",
+              textAlign: "center",
+              background: "var(--accent, #6366f1)",
+              color: "#fff",
+              padding: "10px",
+              borderRadius: "8px",
+              textDecoration: "none",
+              margin: "12px 0",
+              fontWeight: "500"
+            }}
+          >
+            ⚡ Open UPI App (GPay / PhonePe / Paytm)
+          </a>
+
           <p className="note">
-            Scan this with PhonePe, Google Pay or Paytm to pay <strong>₹{order.price}</strong>.
+            Scan the QR code or tap the button above to pay <strong>₹{order.price}</strong>.
           </p>
 
           <label>
@@ -122,6 +174,17 @@ export default function PaymentPanel({ order, onUpdate, settings }) {
               {submitting ? "Sending..." : "Confirm payment"}
             </button>
           </div>
+
+          <button
+            type="button"
+            className="ghost small"
+            onClick={handleCancel}
+            disabled={submitting}
+            style={{ marginTop: "10px", width: "100%", color: "#ef4444" }}
+          >
+            Cancel order
+          </button>
+
           {error && <p className="error">{error}</p>}
         </form>
       )}
