@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { getQuote, placeOrder, countPages, trackOrder, getPublicSettings } from "../api";
+import { compileIdCardsToA4Pdf } from "../utils/idCardCompiler";
 import PriceList from "../components/PriceList";
 import ShopInfo from "../components/ShopInfo";
 import PaymentPanel from "../components/PaymentPanel";
 import PhotoOrder from "../components/PhotoOrder";
 import Modal from "../components/Modal";
+import ImageCropModal from "../components/ImageCropModal";
 import useRates from "../useRates";
 import { statusLabel } from "../statusMeta";
 
@@ -53,8 +55,15 @@ export default function OrderPage() {
   const [orderCode, setOrderCode] = useState(""); 
   const [showPay, setShowPay] = useState(false); 
   const [copied, setCopied] = useState(false);
+  const [isIdLayout, setIsIdLayout] = useState(false);
+  const [cardsPerPage, setCardsPerPage] = useState(2); // Default to 2 per page (Front & Back)
+
+  // Cropping States
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [currentCropImageSrc, setCurrentCropImageSrc] = useState(null);
+  const [currentCropIndex, setCurrentCropIndex] = useState(null);
   
-  // Safe defaults so the page never renders blank
   const [publicSettings, setPublicSettings] = useState({
     guestShowPaper: true,
     guestShowPhoto: true,
@@ -66,7 +75,6 @@ export default function OrderPage() {
     guestShowUPI: true,
   });
 
-  // Fetch the live toggles from the backend using your actual api.js function
   useEffect(() => {
     getPublicSettings()
       .then((data) => {
@@ -88,29 +96,59 @@ export default function OrderPage() {
   }
 
   async function handleFile(e) {
-    const chosen = e.target.files[0];
+    const chosenFiles = Array.from(e.target.files);
     setError("");
-    setFile(null);
-    setForm((prev) => ({ ...prev, pages: 0 }));
-    if (!chosen) return;
+    if (chosenFiles.length === 0) return;
 
-    if (chosen.size > 20 * 1024 * 1024) {
-      setError("File is too large (max 20 MB)");
-      e.target.value = "";
-      return;
+    for (const f of chosenFiles) {
+      if (f.size > 20 * 1024 * 1024) {
+        setError(`File ${f.name} is too large (max 20 MB)`);
+        e.target.value = "";
+        return;
+      }
     }
 
+    setSelectedFiles(chosenFiles);
+    await processAndCompileFiles(chosenFiles, isIdLayout, cardsPerPage);
+    e.target.value = "";
+  }
+
+  async function processAndCompileFiles(filesToProcess, idMode, perPage) {
     setCounting(true);
     try {
-      const { pages } = await countPages(chosen);
-      setFile(chosen);
+      let finalFile = filesToProcess[0];
+
+      if (idMode && filesToProcess.length > 1 && filesToProcess.every(f => f.type.startsWith("image/"))) {
+        const compiledBlob = await compileIdCardsToA4Pdf(filesToProcess, perPage);
+        finalFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
+      }
+
+      const { pages } = await countPages(finalFile);
+      setFile(finalFile);
       setForm((prev) => ({ ...prev, pages }));
     } catch (err) {
       setError(err.message);
-      e.target.value = "";
     } finally {
       setCounting(false);
     }
+  }
+
+  async function handleCropComplete(croppedFile) {
+    const updatedFiles = [...selectedFiles];
+    updatedFiles[currentCropIndex] = croppedFile;
+    setSelectedFiles(updatedFiles);
+    await processAndCompileFiles(updatedFiles, isIdLayout, cardsPerPage);
+  }
+
+  async function handleMove(index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= selectedFiles.length) return;
+    const updatedFiles = [...selectedFiles];
+    const temp = updatedFiles[index];
+    updatedFiles[index] = updatedFiles[newIndex];
+    updatedFiles[newIndex] = temp;
+    setSelectedFiles(updatedFiles);
+    await processAndCompileFiles(updatedFiles, isIdLayout, cardsPerPage);
   }
 
   useEffect(() => {
@@ -167,9 +205,7 @@ export default function OrderPage() {
     setPlaced(order);
     try {
       if (order?.trackingCode) localStorage.setItem("lastTrack", order.trackingCode);
-    } catch {
-      /* storage may be blocked, which is fine */
-    }
+    } catch {}
     setShowPay(true);
   }
 
@@ -182,6 +218,7 @@ export default function OrderPage() {
       openPayment(order);
       setForm(initialForm);
       setFile(null);
+      setSelectedFiles([]);
       setFileKey((k) => k + 1);
       setPrice(0);
       setPrintPages(0);
@@ -206,15 +243,12 @@ export default function OrderPage() {
       await navigator.clipboard.writeText(code);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
-      /* some browsers block copying */
-    }
+    } catch {}
   }
 
   const shownCode = placed?.trackingCode || orderCode;
   const paying = placed?.status === "awaiting_payment";
 
-  // Safely force the mode without causing an infinite loop
   useEffect(() => {
     if (publicSettings) {
       if (!publicSettings.guestShowPaper && mode === "paper") {
@@ -262,7 +296,6 @@ export default function OrderPage() {
         </div>
       )}
 
-      {/* Show the choice grid if at least one service is enabled */}
       {publicSettings && (publicSettings.guestShowPaper || publicSettings.guestShowPhoto) ? (
         <div className="card">
           <h3>What would you like to print?</h3>
@@ -325,25 +358,114 @@ export default function OrderPage() {
             </label>
           </div>
 
-          <h3>2. Your file</h3>
+          <h3>2. Your files</h3>
+          
+          <label className="check" style={{ marginBottom: "12px", background: "rgba(99, 102, 241, 0.08)", padding: "10px", borderRadius: "8px" }}>
+            <input 
+              type="checkbox" 
+              checked={isIdLayout} 
+              onChange={async (e) => {
+                const val = e.target.checked;
+                setIsIdLayout(val);
+                setFile(null);
+                setSelectedFiles([]);
+                setForm(prev => ({ ...prev, pages: 0 }));
+              }} 
+            />
+            <strong>Smart ID Card Layout Mode</strong> (Automatically arranges multiple ID photos into a neat A4 card grid)
+          </label>
+
+          {isIdLayout && (
+            <label style={{ marginBottom: "12px" }}>
+              Photos per A4 Page
+              <select
+                value={cardsPerPage}
+                onChange={async (e) => {
+                  const perPage = Number(e.target.value);
+                  setCardsPerPage(perPage);
+                  if (selectedFiles.length > 0) {
+                    await processAndCompileFiles(selectedFiles, true, perPage);
+                  }
+                }}
+              >
+                <option value={2}>2 Cards per page (Standard Front/Back)</option>
+                <option value={4}>4 Cards per page (Compact Sheet)</option>
+                <option value={6}>6 Cards per page (Dense Sheet)</option>
+              </select>
+            </label>
+          )}
+
           <label>
-            PDF, JPG or PNG (max 20 MB)
+            {isIdLayout ? "Upload multiple ID images (Front & Back)" : "PDF, JPG or PNG (max 20 MB)"}
             <input
               key={fileKey}
               type="file"
               accept=".pdf,.jpg,.jpeg,.png"
+              multiple={isIdLayout}
               onChange={handleFile}
-              required
+              required={!file}
             />
           </label>
-          {counting && <p className="note">Reading your file...</p>}
+
+          {/* Staged files thumbnail preview with Crop & Reordering Controls */}
+          {selectedFiles.length > 0 && selectedFiles[0]?.type?.startsWith("image/") && (
+            <div style={{ margin: "14px 0" }}>
+              <p className="note" style={{ marginBottom: "6px" }}>Arrange photo order & crop individual images:</p>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "10px" }}>
+                {selectedFiles.map((f, index) => {
+                  const previewUrl = URL.createObjectURL(f);
+                  return (
+                    <div key={index} style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px", padding: "8px", textAlign: "center" }}>
+                      <img src={previewUrl} alt={`Upload ${index}`} style={{ width: "100%", height: "70px", objectFit: "cover", borderRadius: "4px" }} />
+                      
+                      <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", gap: "4px" }}>
+                        <button
+                          type="button"
+                          className="small ghost"
+                          disabled={index === 0}
+                          style={{ fontSize: "10px", padding: "2px 4px", flex: 1 }}
+                          onClick={() => handleMove(index, -1)}
+                        >
+                          ⬅️
+                        </button>
+                        <button
+                          type="button"
+                          className="small ghost"
+                          disabled={index === selectedFiles.length - 1}
+                          style={{ fontSize: "10px", padding: "2px 4px", flex: 1 }}
+                          onClick={() => handleMove(index, 1)}
+                        >
+                          ➡️
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        className="small ghost"
+                        style={{ fontSize: "11px", padding: "4px 6px", width: "100%", marginTop: "6px" }}
+                        onClick={() => {
+                          setCurrentCropImageSrc(previewUrl);
+                          setCurrentCropIndex(index);
+                          setCropModalOpen(true);
+                        }}
+                      >
+                        ✏️ Crop
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {counting && <p className="note">Processing and compiling your files...</p>}
           {file && (
             <p className="note">
-              ✓ {file.name}: <strong>{form.pages}</strong> page(s) found
+              ✓ {file.name}: <strong>{form.pages}</strong> page(s) compiled successfully
             </p>
           )}
 
-          {file && (
+          {file && !isIdLayout && (
             <label>
               Pages to print (optional)
               <input
@@ -355,7 +477,7 @@ export default function OrderPage() {
             </label>
           )}
           {rangeError && <p className="error">{rangeError}</p>}
-          {file && !rangeError && (
+          {file && !rangeError && !isIdLayout && (
             <p className="note">
               Printing <strong>{printPages}</strong> of {form.pages} page(s)
             </p>
@@ -466,6 +588,15 @@ export default function OrderPage() {
 
       <PriceList />
       <ShopInfo />
+
+      {/* Image Crop Modal */}
+      <ImageCropModal
+        open={cropModalOpen}
+        imageSrc={currentCropImageSrc}
+        aspect={isIdLayout ? 85.6 / 53.98 : undefined}
+        onClose={() => setCropModalOpen(false)}
+        onCropComplete={handleCropComplete}
+      />
 
       <Modal open={Boolean(placed) && showPay} onClose={closeModal} title="Payment">
         {placed && (
