@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
 import { getRates } from "../api";
 
-// The passport sizes the customer screen offers today (step P3 will make this follow the Pricing page)
-
 export default function PriceList() {
   const [data, setData] = useState(null);
 
@@ -42,6 +40,30 @@ export default function PriceList() {
             ))}
         </tbody>
       </table>
+
+      {/* Smart ID Card Layout Mode Pricing */}
+      {(data.idCardBw !== undefined || data.idCardColor !== undefined) && (
+        <>
+          <h3>Smart ID Card Layout Mode</h3>
+          <table className="rates">
+            <thead>
+              <tr>
+                <th>Layout</th>
+                <th>Black &amp; white</th>
+                <th>Color</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>ID Card Grid Sheet</td>
+                <td>₹{data.idCardBw ?? 10} / sheet</td>
+                <td>₹{data.idCardColor ?? 20} / sheet</td>
+              </tr>
+            </tbody>
+          </table>
+        </>
+      )}
+
       {data.doubleSidedDiscountPercent > 0 && (
         <p className="note">
           Double-sided printing: {data.doubleSidedDiscountPercent}% off.
