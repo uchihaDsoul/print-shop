@@ -21,6 +21,14 @@ const blank = {
 };
 
 export default function WalkinTab() {
+  // Turn on dark theme when opening this tab, turn it off when leaving
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", "dark");
+    return () => {
+      document.documentElement.removeAttribute("data-theme");
+    };
+  }, []);
+
   const [mode, setMode] = useState("paper"); // "paper" or "photo"
   const [form, setForm] = useState(blank);
   const [file, setFile] = useState(null);
