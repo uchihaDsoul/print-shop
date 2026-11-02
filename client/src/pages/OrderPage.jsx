@@ -56,7 +56,7 @@ export default function OrderPage() {
   const [showPay, setShowPay] = useState(false); 
   const [copied, setCopied] = useState(false);
   const [isIdLayout, setIsIdLayout] = useState(false);
-  const [cardsPerPage, setCardsPerPage] = useState(2); // Default to 2 per page (Front & Back)
+  const [cardsPerPage, setCardsPerPage] = useState(2);
 
   // Cropping States
   const [selectedFiles, setSelectedFiles] = useState([]);
@@ -89,6 +89,14 @@ export default function OrderPage() {
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
+    
+    // Strictly restrict phone number to 10 positive digits only
+    if (name === "phone") {
+      const numericValue = value.replace(/\D/g, "").slice(0, 10);
+      setForm((prev) => ({ ...prev, phone: numericValue }));
+      return;
+    }
+
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -214,7 +222,12 @@ export default function OrderPage() {
     setError("");
     setLoading(true);
     try {
-      const order = await placeOrder(form, file);
+      const submissionForm = {
+        ...form,
+        customerName: form.customerName.trim() || "Guest Customer",
+      };
+
+      const order = await placeOrder(submissionForm, file);
       openPayment(order);
       setForm(initialForm);
       setFile(null);
@@ -341,11 +354,11 @@ export default function OrderPage() {
                 name="customerName"
                 value={form.customerName}
                 onChange={handleChange}
-                required
+                placeholder="Leave blank for 'Guest Customer'"
               />
             </label>
             <label>
-              Phone number
+              Phone number (10 digits)
               <input
                 name="phone"
                 value={form.phone}
@@ -353,7 +366,9 @@ export default function OrderPage() {
                 required
                 inputMode="numeric"
                 pattern="[0-9]{10}"
-                title="Enter a 10-digit phone number"
+                maxLength={10}
+                title="Enter exactly 10 digits"
+                placeholder="e.g. 9876543210"
               />
             </label>
           </div>
@@ -372,7 +387,7 @@ export default function OrderPage() {
                 setForm(prev => ({ ...prev, pages: 0 }));
               }} 
             />
-            <strong>Smart ID Card Layout Mode</strong> (Automatically arranges multiple ID photos into a neat A4 card grid)
+            <strong>Smart ID Card Layout Mode</strong> (Automatically arranges multiple ID photos into an A4 card grid)
           </label>
 
           {isIdLayout && (
@@ -407,10 +422,10 @@ export default function OrderPage() {
             />
           </label>
 
-          {/* Staged files thumbnail preview with Crop & Reordering Controls */}
+          {/* Staged files thumbnail preview with Crop, Rotate & Reordering Controls */}
           {selectedFiles.length > 0 && selectedFiles[0]?.type?.startsWith("image/") && (
             <div style={{ margin: "14px 0" }}>
-              <p className="note" style={{ marginBottom: "6px" }}>Arrange photo order & crop individual images:</p>
+              <p className="note" style={{ marginBottom: "6px" }}>Crop, rotate & arrange photo order:</p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "10px" }}>
                 {selectedFiles.map((f, index) => {
                   const previewUrl = URL.createObjectURL(f);
@@ -449,7 +464,7 @@ export default function OrderPage() {
                           setCropModalOpen(true);
                         }}
                       >
-                        ✏️ Crop
+                        ✏️ Crop & Rotate
                       </button>
                     </div>
                   );

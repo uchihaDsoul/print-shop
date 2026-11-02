@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
-import { createWalkin } from "../../adminApi";
-import { getQuote, countPages } from "../../api";
+import { useState, useEffect } from "react";
+import { getRates, placeWalkInOrder, countPages, getPublicSettings } from "../../api";
+import { compileIdCardsToA4Pdf } from "../../utils/idCardCompiler";
+import ImageCropModal from "../../components/ImageCropModal";
 import useRates from "../../useRates";
-import PhotoOrder from "../../components/PhotoOrder";
 
-const blank = {
+const initialForm = {
   customerName: "",
   phone: "",
-  pages: 1,
+  pages: 0,
   pageRange: "",
   copies: 1,
   color: false,
@@ -17,316 +17,299 @@ const blank = {
   binding: false,
   urgent: false,
   note: "",
-  payment: "",
+  paymentStatus: "paid",
 };
 
 export default function WalkinTab() {
-  const [mode, setMode] = useState("paper"); // "paper" or "photo"
-  const [form, setForm] = useState(blank);
+  const rates = useRates();
+  const sizes = rates?.enabledSizes || ["A4"];
+
+  const [form, setForm] = useState(initialForm);
   const [file, setFile] = useState(null);
-  const [fileKey, setFileKey] = useState(0); // changing this resets the file input
+  const [fileKey, setFileKey] = useState(0);
   const [counting, setCounting] = useState(false);
   const [price, setPrice] = useState(0);
   const [printPages, setPrintPages] = useState(0);
   const [rangeError, setRangeError] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [done, setDone] = useState(null);
-  const rates = useRates();
-  const sizes = rates?.enabledSizes || ["A4"];
+  const [successOrder, setSuccessOrder] = useState(null);
+  
+  const [isIdLayout, setIsIdLayout] = useState(false);
+  const [cardsPerPage, setCardsPerPage] = useState(2);
+
+  // Cropping States
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [cropModalOpen, setCropModalOpen] = useState(false);
+  const [currentCropImageSrc, setCurrentCropImageSrc] = useState(null);
+  const [currentCropIndex, setCurrentCropIndex] = useState(null);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-    setForm((p) => ({ ...p, [name]: type === "checkbox" ? checked : value }));
+    
+    // Strictly restrict phone number to 10 positive digits only
+    if (name === "phone") {
+      const numericValue = value.replace(/\D/g, "").slice(0, 10);
+      setForm((prev) => ({ ...prev, phone: numericValue }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: type === "checkbox" ? checked : value,
+    }));
   }
 
   async function handleFile(e) {
-    const chosen = e.target.files[0] || null;
+    const chosenFiles = Array.from(e.target.files);
     setError("");
-    if (!chosen) {
-      setFile(null);
-      return;
+    if (chosenFiles.length === 0) return;
+
+    for (const f of chosenFiles) {
+      if (f.size > 20 * 1024 * 1024) {
+        setError(`File ${f.name} is too large (max 20 MB)`);
+        e.target.value = "";
+        return;
+      }
     }
+
+    setSelectedFiles(chosenFiles);
+    await processAndCompileFiles(chosenFiles, isIdLayout, cardsPerPage);
+    e.target.value = "";
+  }
+
+  async function processAndCompileFiles(filesToProcess, idMode, perPage) {
     setCounting(true);
     try {
-      const { pages } = await countPages(chosen);
-      setFile(chosen);
-      setForm((p) => ({ ...p, pages }));
+      let finalFile = filesToProcess[0];
+
+      if (idMode && filesToProcess.length > 1 && filesToProcess.every(f => f.type.startsWith("image/"))) {
+        const compiledBlob = await compileIdCardsToA4Pdf(filesToProcess, perPage);
+        finalFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
+      }
+
+      const { pages } = await countPages(finalFile);
+      setFile(finalFile);
+      setForm((prev) => ({ ...prev, pages }));
     } catch (err) {
       setError(err.message);
-      setFile(null);
-      setFileKey((k) => k + 1);
     } finally {
       setCounting(false);
     }
   }
 
-  useEffect(() => {
-    if (mode !== "paper") return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      getQuote(form)
-        .then((d) => {
-          if (cancelled) return;
-          setPrice(d.price);
-          setPrintPages(d.printPages || 0);
-          setRangeError(d.error || "");
-        })
-        .catch(() => !cancelled && setPrice(0));
-    }, 300);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [
-    mode,
-    form.pages,
-    form.pageRange,
-    form.copies,
-    form.color,
-    form.size,
-    form.doubleSided,
-    form.stapling,
-    form.binding,
-    form.urgent,
-  ]);
+  async function handleCropComplete(croppedFile) {
+    const updatedFiles = [...selectedFiles];
+    updatedFiles[currentCropIndex] = croppedFile;
+    setSelectedFiles(updatedFiles);
+    await processAndCompileFiles(updatedFiles, isIdLayout, cardsPerPage);
+  }
+
+  async function handleMove(index, direction) {
+    const newIndex = index + direction;
+    if (newIndex < 0 || newIndex >= selectedFiles.length) return;
+    const updatedFiles = [...selectedFiles];
+    const temp = updatedFiles[index];
+    updatedFiles[index] = updatedFiles[newIndex];
+    updatedFiles[newIndex] = temp;
+    setSelectedFiles(updatedFiles);
+    await processAndCompileFiles(updatedFiles, isIdLayout, cardsPerPage);
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    setDone(null);
-    setSaving(true);
+    setLoading(true);
     try {
-      const order = await createWalkin(form, file);
-      setDone(order);
-      setForm(blank);
+      // Ensure backend schema requirement for customerName is always met
+      const submissionForm = {
+        ...form,
+        customerName: form.customerName.trim() || "Walk-In Customer",
+      };
+
+      const order = await placeWalkInOrder(submissionForm, file);
+      setSuccessOrder(order);
+      setForm(initialForm);
       setFile(null);
+      setSelectedFiles([]);
       setFileKey((k) => k + 1);
     } catch (err) {
       setError(err.message);
     } finally {
-      setSaving(false);
+      setLoading(false);
     }
   }
 
-  // called by the photo screens when the order was saved
-  function photoPlaced(order) {
-    setDone(order);
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
-
   return (
-    <>
-      <div className="card">
-        <h2>Add walk-in order</h2>
+    <div className="card">
+      <h2>Create Walk-In Order (Counter)</h2>
+      {successOrder && (
+        <div className="success-banner" style={{ background: "rgba(16, 185, 129, 0.1)", padding: "12px", borderRadius: "8px", marginBottom: "16px" }}>
+          <p>✓ Order <strong>{successOrder.trackingCode}</strong> created successfully! Status: Queued for print.</p>
+          <button type="button" className="small" onClick={() => setSuccessOrder(null)}>Create Another</button>
+        </div>
+      )}
 
-        {done && (
-          <div className="success-msg">
-            ✓ Order added. Code <strong>{done.trackingCode}</strong> · ₹{done.price}
-            {done.warnings?.map((w) => (
-              <div key={w}>⚠ {w}</div>
-            ))}
+      <form onSubmit={handleSubmit}>
+        <h3>1. Customer Details</h3>
+        <div className="row">
+          <label>
+            Customer Name
+            <input 
+              name="customerName" 
+              value={form.customerName} 
+              onChange={handleChange} 
+              placeholder="Leave blank for 'Walk-In Customer'" 
+            />
+          </label>
+          <label>
+            Phone Number (10 digits)
+            <input 
+              name="phone" 
+              value={form.phone} 
+              onChange={handleChange} 
+              placeholder="e.g. 9876543210" 
+              inputMode="numeric"
+              pattern="[0-9]{10}"
+              maxLength={10}
+              title="Enter exactly 10 digits"
+            />
+          </label>
+        </div>
+
+        <h3>2. Files & Smart Layout</h3>
+        
+        <label className="check" style={{ marginBottom: "12px", background: "rgba(99, 102, 241, 0.08)", padding: "10px", borderRadius: "8px" }}>
+          <input 
+            type="checkbox" 
+            checked={isIdLayout} 
+            onChange={async (e) => {
+              const val = e.target.checked;
+              setIsIdLayout(val);
+              setFile(null);
+              setSelectedFiles([]);
+              setForm(prev => ({ ...prev, pages: 0 }));
+            }} 
+          />
+          <strong>Smart ID Card Layout Mode</strong> (Automatically arranges multiple ID photos into an A4 card grid)
+        </label>
+
+        {isIdLayout && (
+          <label style={{ marginBottom: "12px" }}>
+            Photos per A4 Page
+            <select
+              value={cardsPerPage}
+              onChange={async (e) => {
+                const perPage = Number(e.target.value);
+                setCardsPerPage(perPage);
+                if (selectedFiles.length > 0) {
+                  await processAndCompileFiles(selectedFiles, true, perPage);
+                }
+              }}
+            >
+              <option value={2}>2 Cards per page (Standard Front/Back)</option>
+              <option value={4}>4 Cards per page (Compact Sheet)</option>
+              <option value={6}>6 Cards per page (Dense Sheet)</option>
+            </select>
+          </label>
+        )}
+
+        <label>
+          {isIdLayout ? "Upload ID Images (Front & Back)" : "Select Document / Image"}
+          <input
+            key={fileKey}
+            type="file"
+            accept=".pdf,.jpg,.jpeg,.png"
+            multiple={isIdLayout}
+            onChange={handleFile}
+            required={!file}
+          />
+        </label>
+
+        {/* Thumbnail Preview with Reorder, Rotate & Crop triggers */}
+        {selectedFiles.length > 0 && selectedFiles[0]?.type?.startsWith("image/") && (
+          <div style={{ margin: "14px 0" }}>
+            <p className="note" style={{ marginBottom: "6px" }}>Crop, rotate & arrange photo order:</p>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "10px" }}>
+              {selectedFiles.map((f, index) => {
+                const previewUrl = URL.createObjectURL(f);
+                return (
+                  <div key={index} style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px", padding: "8px", textAlign: "center" }}>
+                    <img src={previewUrl} alt={`Upload ${index}`} style={{ width: "100%", height: "70px", objectFit: "cover", borderRadius: "4px" }} />
+                    
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", gap: "4px" }}>
+                      <button
+                        type="button"
+                        className="small ghost"
+                        disabled={index === 0}
+                        style={{ fontSize: "10px", padding: "2px 4px", flex: 1 }}
+                        onClick={() => handleMove(index, -1)}
+                      >
+                        ⬅️
+                      </button>
+                      <button
+                        type="button"
+                        className="small ghost"
+                        disabled={index === selectedFiles.length - 1}
+                        style={{ fontSize: "10px", padding: "2px 4px", flex: 1 }}
+                        onClick={() => handleMove(index, 1)}
+                      >
+                        ➡️
+                      </button>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="small ghost"
+                      style={{ fontSize: "11px", padding: "4px 6px", width: "100%", marginTop: "6px" }}
+                      onClick={() => {
+                        setCurrentCropImageSrc(previewUrl);
+                        setCurrentCropIndex(index);
+                        setCropModalOpen(true);
+                      }}
+                    >
+                      ✏️ Crop & Rotate
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         )}
 
-        <div className="choice-grid">
-          <button
-            type="button"
-            className={"choice" + (mode === "paper" ? " on" : "")}
-            onClick={() => setMode("paper")}
-          >
-            Paper print
-            <small>Documents, PDFs and images</small>
-          </button>
-          <button
-            type="button"
-            className={"choice" + (mode === "photo" ? " on" : "")}
-            onClick={() => setMode("photo")}
-          >
-            Photo print
-            <small>Full A4 photos and passport photos</small>
-          </button>
+        {counting && <p className="note">Processing and compiling layout...</p>}
+        {file && (
+          <p className="note">
+            ✓ {file.name}: <strong>{form.pages}</strong> page(s) ready
+          </p>
+        )}
+
+        <h3>3. Print Options</h3>
+        <div className="row">
+          <label>
+            Copies
+            <input type="number" min="1" name="copies" value={form.copies} onChange={handleChange} required />
+          </label>
+          <label>
+            Color Print
+            <input type="checkbox" name="color" checked={form.color} onChange={handleChange} />
+          </label>
         </div>
-      </div>
 
-      {mode === "photo" && <PhotoOrder walkin onPlaced={photoPlaced} />}
+        <button type="submit" disabled={loading || counting || !file}>
+          {loading ? "Creating Order..." : "Create Walk-In Order & Print"}
+        </button>
+        {error && <p className="error">{error}</p>}
+      </form>
 
-      {mode === "paper" && (
-        <form className="card" onSubmit={handleSubmit}>
-          <div className="row">
-            <label>
-              Name
-              <input
-                name="customerName"
-                value={form.customerName}
-                onChange={handleChange}
-                required
-              />
-            </label>
-            <label>
-              Phone
-              <input
-                name="phone"
-                value={form.phone}
-                onChange={handleChange}
-                required
-                inputMode="numeric"
-                pattern="[0-9]{10}"
-                title="10 digits"
-              />
-            </label>
-          </div>
-
-          <label>
-            File (optional, pages are counted automatically)
-            <input
-              key={fileKey}
-              type="file"
-              accept=".pdf,.jpg,.jpeg,.png"
-              onChange={handleFile}
-            />
-          </label>
-          {counting && <p className="note">Reading file...</p>}
-          {file && (
-            <p className="note">
-              ✓ {file.name}: <strong>{form.pages}</strong> page(s) found
-            </p>
-          )}
-
-          <div className="row">
-            <label>
-              Pages{file && " (auto)"}
-              <input
-                type="number"
-                min="1"
-                name="pages"
-                value={form.pages}
-                onChange={handleChange}
-                disabled={Boolean(file)}
-              />
-            </label>
-            <label>
-              Copies
-              <input
-                type="number"
-                min="1"
-                name="copies"
-                value={form.copies}
-                onChange={handleChange}
-              />
-            </label>
-            {sizes.length > 1 && (
-              <label>
-                Size
-                <select name="size" value={form.size} onChange={handleChange}>
-                  {sizes.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-          </div>
-
-          <label>
-            Pages to print (optional)
-            <input
-              name="pageRange"
-              value={form.pageRange}
-              onChange={handleChange}
-              placeholder="e.g. 1-5, 8 (blank = all)"
-            />
-          </label>
-          {rangeError && <p className="error">{rangeError}</p>}
-          {!rangeError && printPages > 0 && (
-            <p className="note">
-              Printing <strong>{printPages}</strong> of {form.pages} page(s)
-            </p>
-          )}
-
-          <div className="row">
-            <label className="check">
-              <input
-                type="checkbox"
-                name="color"
-                checked={form.color}
-                onChange={handleChange}
-              />
-              Color
-            </label>
-          </div>
-
-          <div className="row">
-            <label className="check">
-              <input
-                type="checkbox"
-                name="stapling"
-                checked={form.stapling}
-                onChange={handleChange}
-              />
-              Stapling
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                name="binding"
-                checked={form.binding}
-                onChange={handleChange}
-              />
-              Binding
-            </label>
-            <label className="check">
-              <input
-                type="checkbox"
-                name="urgent"
-                checked={form.urgent}
-                onChange={handleChange}
-              />
-              Urgent
-            </label>
-          </div>
-
-          <label>
-            Note (optional)
-            <input
-              name="note"
-              value={form.note}
-              onChange={handleChange}
-              maxLength={300}
-            />
-          </label>
-
-          <label>
-            Payment
-            <select
-              name="payment"
-              value={form.payment}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Choose...</option>
-              <option value="cash">Cash received</option>
-              <option value="upi">UPI received</option>
-              <option value="none">Not paid yet</option>
-            </select>
-          </label>
-
-          <div className="price">
-            <span>Price</span>
-            <strong>₹{price}</strong>
-          </div>
-
-          {error && <p className="error">{error}</p>}
-
-          <button
-            type="submit"
-            disabled={saving || counting || Boolean(rangeError)}
-          >
-            {saving ? "Saving..." : "Add order"}
-          </button>
-        </form>
-      )}
-    </>
+      {/* Image Crop & Rotate Modal */}
+      <ImageCropModal
+        open={cropModalOpen}
+        imageSrc={currentCropImageSrc}
+        aspect={isIdLayout ? 85.6 / 53.98 : undefined}
+        onClose={() => setCropModalOpen(false)}
+        onCropComplete={handleCropComplete}
+      />
+    </div>
   );
 }

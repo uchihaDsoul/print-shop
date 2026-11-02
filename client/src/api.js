@@ -1,7 +1,16 @@
 const API = import.meta.env.VITE_API_URL;
 
-async function request(path, options = {}) {
-  const res = await fetch(`${API}/api/orders${path}`, options);
+async function request(path, options = {}, isAdmin = false) {
+  const headers = { ...(options.headers || {}) };
+  
+  if (isAdmin) {
+    const token = localStorage.getItem("token") || localStorage.getItem("adminToken");
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+  }
+
+  const res = await fetch(`${API}/api/orders${path}`, { ...options, headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Something went wrong");
   return data;
@@ -27,6 +36,15 @@ export const placeOrder = (form, file) => {
   fd.append("file", file);
   return request("/online", { method: "POST", body: fd });
 };
+
+export const createWalkInOrder = (form, file) => {
+  const fd = new FormData();
+  Object.entries(form).forEach(([key, value]) => fd.append(key, value));
+  if (file) fd.append("file", file);
+  return request("/walkin", { method: "POST", body: fd }, true); // marked as admin request
+};
+
+export const placeWalkInOrder = createWalkInOrder;
 
 export const trackOrder = (code) =>
   request(`/track/${encodeURIComponent(code)}`);
@@ -60,7 +78,6 @@ async function photoRequest(path, options = {}) {
 
 export const getPhotoQuote = (data) => photoRequest("/quote", json("POST", data));
 
-// fields: plain values (objects and lists are sent as JSON text), files: array of File
 export function placePhotoOrder(fields, files) {
   const fd = new FormData();
   Object.entries(fields).forEach(([key, value]) => {
