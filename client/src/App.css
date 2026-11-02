@@ -1824,3 +1824,47 @@ html[data-theme="dark"] .ph-idle {
     background: rgba(17, 17, 27, 0.95);
   }
 }
+
+/* =========================================================
+   DARK THEME — Stage 2 additions (photo and sheet elements)
+   ========================================================= */
+
+/* Sheet preview SVG white background needs to stay white even in dark mode
+   because it represents a sheet of paper */
+html[data-theme="dark"] .sheet-svg {
+  background: #ffffff;
+  border-radius: 4px;
+}
+
+/* DPI quality tags */
+html[data-theme="dark"] .tag.online {
+  background: rgba(52, 211, 153, 0.18);
+  color: #34d399;
+}
+
+/* Photo thumb background */
+html[data-theme="dark"] .photo-thumb {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+/* Crop frame border stands out more on dark */
+html[data-theme="dark"] .crop-frame {
+  border-color: rgba(251, 113, 133, 0.7);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* The price bar gradient is already dark enough; just soften the shadow */
+html[data-theme="dark"] .price {
+  box-shadow: 0 8px 24px rgba(244, 63, 94, 0.3);
+}
+
+/* Photo editor inner section */
+html[data-theme="dark"] .photo-editor {
+  border-top-color: var(--line);
+}
+
+/* Sheet grid card */
+html[data-theme="dark"] .sheet-grid {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.1);
+}

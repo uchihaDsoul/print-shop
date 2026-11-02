@@ -24,10 +24,16 @@ import PrintQueueTab from "./pages/admin/PrintQueueTab";
 import Icon from "./components/Icon";
 import { RequireRole, useAuth } from "./AuthContext";
 import { SHOP } from "./shopConfig";
+import { useState, useEffect } from "react";
 
 const BOSS = ["admin", "superadmin"];
 
 function PublicLayout() {
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", "dark");
+    return () => document.documentElement.removeAttribute("data-theme");
+  }, []);
+
   return (
     <div className="app">
       <header className="topbar">
@@ -58,7 +64,6 @@ function PublicLayout() {
     </div>
   );
 }
-
 // /admin lands on Requests for managers and on the Dashboard for bosses
 function AdminHome() {
   const { user } = useAuth();

@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { getRates } from "../api";
 
 // The passport sizes the customer screen offers today (step P3 will make this follow the Pricing page)
-const ORDERABLE_SIZES = ["35x45", "51x51"];
 
 export default function PriceList() {
   const [data, setData] = useState(null);
@@ -17,9 +16,7 @@ export default function PriceList() {
 
   const a4Photo = data.photo && data.photo.a4;
   const sizes = data.photoSizes
-    ? Object.entries(data.photoSizes).filter(
-        ([key, s]) => s.enabled && ORDERABLE_SIZES.includes(key),
-      )
+    ? Object.entries(data.photoSizes).filter(([key, s]) => s.enabled)
     : [];
 
   return (
