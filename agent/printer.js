@@ -52,7 +52,11 @@ async function printJob(job) {
   if (copies > 1) settings.push(copies + "x");
   settings.push(job.color ? "color" : "monochrome");
   settings.push("simplex");
-  settings.push("paper=A4");
+  if (job.paper === "4x6") {
+    settings.push("noscale"); // 4 x 6 sheets: not tested yet, see the 5.11 test
+  } else {
+    settings.push("paper=A4");
+  }
 
   const file = await downloadTo(
     job.url,

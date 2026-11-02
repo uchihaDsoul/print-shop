@@ -1,10 +1,22 @@
 import { useEffect, useState } from "react";
-import { listPrintQueue, setOrderStatus, printNow, getShopSettings } from "../../adminApi";
+import {
+  listPrintQueue,
+  setOrderStatus,
+  printNow,
+  getShopSettings,
+} from "../../adminApi";
 import { useAuth } from "../../AuthContext";
+import PaperCards, { ReadyButton } from "./PaperCards";
 
 const BOSS = ["admin", "superadmin"];
 
 function describe(o) {
+  if (o.orderType === "passport") {
+    return `${o.passportPieces} passport photo(s) · ${o.passportSize} mm · ${o.color ? "Color" : "B/W"}`;
+  }
+  if (o.orderType === "photo_a4") {
+    return `${o.printPages} A4 photo sheet(s) · ${o.color ? "Color" : "B/W"}`;
+  }
   const parts = [
     `${o.printPages} page${o.printPages > 1 ? "s" : ""}`,
     `${o.copies} copy`,
@@ -93,7 +105,11 @@ export default function PrintQueueTab() {
 
   const by = (s) => orders.filter((o) => o.status === s);
   const button = (o, label, fn, ghost = false) => (
-    <button className={ghost ? "small ghost" : "small"} disabled={busyId === o._id} onClick={() => run(o, fn)}>
+    <button
+      className={ghost ? "small ghost" : "small"}
+      disabled={busyId === o._id}
+      onClick={() => run(o, fn)}
+    >
       {label}
     </button>
   );
@@ -104,36 +120,58 @@ export default function PrintQueueTab() {
     <div>
       <h1>Print queue</h1>
       <p className="ph-muted">
-        Confirmed orders print automatically. After printing, check the paper, then tap Ready.
+        Confirmed orders print automatically. After printing, check the paper,
+        then tap Ready.
       </p>
       {error && <p className="ph-error">{error}</p>}
+      <PaperCards />
       {empty && <p className="ph-muted">Nothing in the queue.</p>}
 
       <Section
         title="Print failed"
         hint="Check the printer (paper, ink) and the paper tray. Retry only if nothing came out."
         orders={by("print_failed")}
-        render={(o) => button(o, "Retry", () => setOrderStatus(o._id, "queued"))}
+        render={(o) =>
+          button(o, "Retry", () => setOrderStatus(o._id, "queued"))
+        }
       />
 
-      <Section title="Printing now" orders={by("printing")} render={() => <span className="ph-muted">In progress...</span>} />
+      <Section
+        title="Printing now"
+        orders={by("printing")}
+        render={() => <span className="ph-muted">In progress...</span>}
+      />
 
       <Section
         title="Printed: check the paper"
         orders={by("printed")}
-        render={(o) => button(o, "Ready", () => setOrderStatus(o._id, "ready"))}
+        render={(o) => (
+          <ReadyButton
+            order={o}
+            busy={busyId === o._id}
+            onClick={() => run(o, () => setOrderStatus(o._id, "ready"))}
+          />
+        )}
       />
 
       <Section
         title="Waiting to print"
-        hint={manualTiming ? "Print timing is manual: tap Print now to release an order." : ""}
+        hint={
+          manualTiming
+            ? "Print timing is manual: tap Print now to release an order."
+            : ""
+        }
         orders={by("queued")}
         render={(o) => (
           <>
             {(o.doubleSided || o.size !== "A4") && (
-              <span className="ph-pill ph-warn">Held: needs manual handling</span>
+              <span className="ph-pill ph-warn">
+                Held: needs manual handling
+              </span>
             )}
-            {manualTiming && !o.printNow && button(o, "Print now", () => printNow(o._id))}
+            {manualTiming &&
+              !o.printNow &&
+              button(o, "Print now", () => printNow(o._id))}
           </>
         )}
       />
@@ -141,7 +179,9 @@ export default function PrintQueueTab() {
       <Section
         title="Ready for pickup"
         orders={by("ready")}
-        render={(o) => button(o, "Collected", () => setOrderStatus(o._id, "collected"))}
+        render={(o) =>
+          button(o, "Collected", () => setOrderStatus(o._id, "collected"))
+        }
       />
     </div>
   );

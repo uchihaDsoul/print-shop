@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { getPhotoQuote, placePhotoOrder } from "../api";
+import { createPhotoWalkin } from "../adminApi";
 import {
   A4_RATIO,
   a4Dpi,
@@ -46,7 +47,7 @@ const revokeAll = (p) => {
 };
 
 // onPlaced(order) opens the payment popup on the order page
-export default function PhotoOrder({ onPlaced }) {
+export default function PhotoOrder({ onPlaced, walkin = false }) {
   const [kind, setKind] = useState("a4"); // "a4" or "passport"
   const [details, setDetails] = useState({ customerName: "", phone: "" });
   const [photos, setPhotos] = useState([]);
@@ -58,6 +59,7 @@ export default function PhotoOrder({ onPlaced }) {
   const [error, setError] = useState("");
   const [inputKey, setInputKey] = useState(0); // changing this empties the file input
   const [openId, setOpenId] = useState(null); // which photo's preview is open
+  const [payment, setPayment] = useState(""); // staff walk-in only
 
   // keeps the latest list so the cleanup below can release the pictures
   const photosRef = useRef([]);
@@ -218,15 +220,19 @@ export default function PhotoOrder({ onPlaced }) {
     if (tooManySheets)
       return setError(`An order can have at most ${MAX_SHEETS} sheets.`);
 
+    if (walkin && !payment) return setError("Choose how the customer paid.");
+
     setLoading(true);
     try {
-      const order = await placePhotoOrder(
+      const send = walkin ? createPhotoWalkin : placePhotoOrder;
+      const order = await send(
         {
           customerName: details.customerName.trim(),
           phone: details.phone,
           orderType: "photo_a4",
           color,
           note,
+          ...(walkin ? { payment } : {}),
           items: photos.map((p) => ({
             copies: p.copies,
             fit: p.fit,
@@ -243,6 +249,7 @@ export default function PhotoOrder({ onPlaced }) {
       setOpenId(null);
       setDetails({ customerName: "", phone: "" });
       setNote("");
+      setPayment("");
       setPrice(0);
     } catch (err) {
       setError(err.message);
@@ -275,7 +282,9 @@ export default function PhotoOrder({ onPlaced }) {
         </button>
       </div>
 
-      {kind === "passport" && <PassportOrder onPlaced={onPlaced} />}
+      {kind === "passport" && (
+        <PassportOrder onPlaced={onPlaced} walkin={walkin} />
+      )}
 
       {kind === "a4" && (
         <form className="photo-form" onSubmit={handleSubmit}>
@@ -520,6 +529,22 @@ export default function PhotoOrder({ onPlaced }) {
               placeholder="e.g. Glossy paper if you have it"
             />
           </label>
+
+          {walkin && (
+            <label>
+              Payment
+              <select
+                value={payment}
+                onChange={(e) => setPayment(e.target.value)}
+                required
+              >
+                <option value="">Choose...</option>
+                <option value="cash">Cash received</option>
+                <option value="upi">UPI received</option>
+                <option value="none">Not paid yet</option>
+              </select>
+            </label>
+          )}
 
           <div className="price">
             <span>Estimated price</span>

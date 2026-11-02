@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getRates } from "../api";
 
+// The passport sizes the customer screen offers today (step P3 will make this follow the Pricing page)
+
 export default function PriceList() {
   const [data, setData] = useState(null);
 
@@ -11,6 +13,11 @@ export default function PriceList() {
   }, []);
 
   if (!data) return null;
+
+  const a4Photo = data.photo && data.photo.a4;
+  const sizes = data.photoSizes
+    ? Object.entries(data.photoSizes).filter(([key, s]) => s.enabled)
+    : [];
 
   return (
     <div className="card">
@@ -52,6 +59,37 @@ export default function PriceList() {
             · Spiral binding: ₹{data.extras.binding} per copy · Urgent: ₹
             {data.extras.urgent} per order
           </p>
+        </>
+      )}
+
+      {(a4Photo || sizes.length > 0) && (
+        <>
+          <h3>Photo prints</h3>
+          <table className="rates">
+            <thead>
+              <tr>
+                <th>Photo</th>
+                <th>Black &amp; white</th>
+                <th>Color</th>
+              </tr>
+            </thead>
+            <tbody>
+              {a4Photo && (
+                <tr>
+                  <td>Full A4 photo</td>
+                  <td>₹{a4Photo.bw} / sheet</td>
+                  <td>₹{a4Photo.color} / sheet</td>
+                </tr>
+              )}
+              {sizes.map(([key, s]) => (
+                <tr key={key}>
+                  <td>Passport {s.label}</td>
+                  <td>₹{s.bw} / photo</td>
+                  <td>₹{s.color} / photo</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </>
       )}
     </div>

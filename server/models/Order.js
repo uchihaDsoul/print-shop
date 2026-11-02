@@ -70,15 +70,18 @@ const orderSchema = new mongoose.Schema(
     // orders from before the payment flow existed (the print agent skips them)
     legacy: { type: Boolean, default: false },
 
-        // photo orders (Phase 5). A missing orderType means a normal document order.
+    // photo orders (Phase 5). A missing orderType means a normal document order.
     orderType: {
       type: String,
       enum: ["document", "photo_a4", "passport"],
       default: "document",
     },
-    passportSize: { type: String, enum: ["", "35x45", "51x51"], default: "" },
+    passportSize: { type: String, enum: ["", "35x45", "35x35", "51x51", "25x35"], default: "" },
     passportPieces: { type: Number, default: 0 },
     passportPaper: { type: String, enum: ["", "a4", "4x6"], default: "" }, // chosen by staff when the paper is loaded (step 5.9)
+    passportSourceId: { type: String, default: "" }, // the customer's cropped passport photo, kept until the order ends
+    passportSourceType: { type: String, default: "" },
+    passportSourceFormat: { type: String, default: "" },
   },
   { timestamps: true },
 );

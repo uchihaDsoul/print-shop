@@ -10,10 +10,22 @@ const DEFAULTS = {
   },
   doubleSidedDiscountPercent: 10,
   extras: { stapling: 0, binding: 30, urgent: 20 },
-  // photo prints: A4 photo is per sheet, passport is per piece (placeholders, set real ones on the Pricing page)
-  photo: {
-    a4: { bw: 25, color: 40 },
-    passport: { bw: 8, color: 10 },
+  // Full A4 photo: price per sheet (placeholders, set real ones on the Pricing page)
+  photo: { a4: { bw: 25, color: 40 } },
+  // Passport and ID photo sizes: price per piece. Only "enabled" and the prices can be edited.
+  photoSizes: {
+    "35x45": { label: "35 x 45 mm", wMm: 35, hMm: 45, enabled: true, bw: 8, color: 10 },
+    "35x35": { label: "35 x 35 mm", wMm: 35, hMm: 35, enabled: false, bw: 8, color: 10 },
+    "51x51": { label: "51 x 51 mm (2 x 2 inch)", wMm: 50.8, hMm: 50.8, enabled: true, bw: 8, color: 10 },
+    "25x35": { label: "25 x 35 mm (PAN card)", wMm: 25, hMm: 35, enabled: false, bw: 8, color: 10 },
+  },
+  // Papers the shop may load. "cost" is what one sheet costs the shop (private, not shown to customers).
+  papers: {
+    a4: { label: "A4", wMm: 210, hMm: 297, enabled: true, cost: 10, driverName: "A4" },
+    a5: { label: "A5", wMm: 148.5, hMm: 210, enabled: false, cost: 6, driverName: "" },
+    "3.5x5": { label: "3.5 x 5 inch (3R)", wMm: 88.9, hMm: 127, enabled: false, cost: 4, driverName: "" },
+    "4x6": { label: "4 x 6 inch (4R)", wMm: 101.6, hMm: 152.4, enabled: false, cost: 5, driverName: "" },
+    "5x7": { label: "5 x 7 inch (5R)", wMm: 127, hMm: 177.8, enabled: false, cost: 8, driverName: "" },
   },
 };
 
@@ -33,8 +45,48 @@ function num(value, label, max = 100000) {
   return Math.round(n * 100) / 100;
 }
 
-// older saved prices have no photo section, so a missing value falls back to the default
+// older saved prices have no photo sections, so a missing value falls back to the default
 const orDefault = (value, fallback) => (value === undefined ? fallback : value);
+
+function validateSizes(input, legacy) {
+  const given = input && typeof input === "object" ? input : {};
+  const out = {};
+  for (const [key, def] of Object.entries(DEFAULTS.photoSizes)) {
+    const e = given[key] || {};
+    out[key] = {
+      label: def.label,
+      wMm: def.wMm,
+      hMm: def.hMm,
+      enabled: e.enabled === undefined ? def.enabled : Boolean(e.enabled),
+      bw: num(orDefault(e.bw, orDefault(legacy.bw, def.bw)), `${def.label} black and white price`),
+      color: num(orDefault(e.color, orDefault(legacy.color, def.color)), `${def.label} color price`),
+    };
+  }
+  if (!Object.values(out).some((s) => s.enabled)) {
+    throw new Error("Switch on at least one passport photo size");
+  }
+  return out;
+}
+
+function validatePapers(input) {
+  const given = input && typeof input === "object" ? input : {};
+  const out = {};
+  for (const [key, def] of Object.entries(DEFAULTS.papers)) {
+    const e = given[key] || {};
+    const driverName = String(orDefault(e.driverName, def.driverName)).trim();
+    if (driverName.length > 60) throw new Error(`${def.label}: the driver paper name must be 60 characters or fewer`);
+    out[key] = {
+      label: def.label,
+      wMm: def.wMm,
+      hMm: def.hMm,
+      enabled: e.enabled === undefined ? def.enabled : Boolean(e.enabled),
+      cost: num(orDefault(e.cost, def.cost), `${def.label} cost per sheet`),
+      driverName,
+    };
+  }
+  if (!Object.values(out).some((p) => p.enabled)) throw new Error("Switch on at least one paper");
+  return out;
+}
 
 // Checks the input and returns a clean copy, or throws a friendly error
 function validatePricing(input) {
@@ -42,7 +94,7 @@ function validatePricing(input) {
   const e = (input && input.extras) || {};
   const p = (input && input.photo) || {};
   const pa4 = p.a4 || {};
-  const pps = p.passport || {};
+  const legacyPassport = p.passport || {}; // old saved prices had one passport price for every size
 
   // older saved prices have no enabledSizes, so fall back to the default
   const wanted = Array.isArray(input && input.enabledSizes)
@@ -79,11 +131,9 @@ function validatePricing(input) {
         bw: num(orDefault(pa4.bw, DEFAULTS.photo.a4.bw), "A4 photo black and white price"),
         color: num(orDefault(pa4.color, DEFAULTS.photo.a4.color), "A4 photo color price"),
       },
-      passport: {
-        bw: num(orDefault(pps.bw, DEFAULTS.photo.passport.bw), "Passport black and white price"),
-        color: num(orDefault(pps.color, DEFAULTS.photo.passport.color), "Passport color price"),
-      },
     },
+    photoSizes: validateSizes(input && input.photoSizes, legacyPassport),
+    papers: validatePapers(input && input.papers),
   };
 }
 
@@ -121,6 +171,12 @@ async function savePricing(input, username) {
 
 const getPricing = () => current;
 
+// What customers may see: everything except the shop's private paper costs
+function getPublicPricing() {
+  const { papers, ...rest } = current;
+  return rest;
+}
+
 // Returns the size if it is enabled, otherwise the first enabled size
 function pickSize(value) {
   const { enabledSizes } = current;
@@ -157,10 +213,10 @@ function calculateA4PhotoPrice({ sheets, color }) {
   return Math.round(sheets * perSheet);
 }
 
-// Passport photos: price per piece
-function calculatePassportPrice({ pieces, color }) {
-  const perPiece = current.photo.passport[color ? "color" : "bw"];
-  return Math.round(pieces * perPiece);
+// Passport photos: price per piece, for the chosen size
+function calculatePassportPrice({ pieces, color, size }) {
+  const s = current.photoSizes[size] || current.photoSizes["35x45"];
+  return Math.round(pieces * s[color ? "color" : "bw"]);
 }
 
 module.exports = {
@@ -168,6 +224,7 @@ module.exports = {
   calculateA4PhotoPrice,
   calculatePassportPrice,
   getPricing,
+  getPublicPricing,
   loadPricing,
   savePricing,
   pickSize,

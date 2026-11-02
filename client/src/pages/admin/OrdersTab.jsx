@@ -7,6 +7,7 @@ import {
   getFileLink,
 } from "../../adminApi";
 import Icon from "../../components/Icon";
+import { orderSummary } from "../../orderSummary";
 import { rupees, shortDate } from "../../format";
 import {
   ALL_STATUSES,
@@ -152,12 +153,7 @@ export default function OrdersTab() {
               <span className="note">{o.phone}</span>
             </div>
 
-            <div className="note">
-              {o.printPages || o.pages} of {o.pages} pages
-              {o.pageRange ? ` (${o.pageRange})` : ""} × {o.copies} · {o.size} ·{" "}
-              {o.color ? "Color" : "B/W"} ·{" "}
-              {o.doubleSided ? "Double" : "Single"}-sided
-            </div>
+            <div className="note">{orderSummary(o)}</div>
 
             {(o.stapling || o.binding || o.urgent) && (
               <div>

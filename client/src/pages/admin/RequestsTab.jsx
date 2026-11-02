@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { useRequests } from "../../RequestsContext";
 import { confirmPayment, rejectPayment, getFileLink } from "../../adminApi";
 import { rupees } from "../../format";
+import { orderSummary } from "../../orderSummary";
 
 const QUICK_REASONS = [
   "Payment not received",
@@ -53,7 +54,7 @@ export default function RequestsTab() {
     if (
       method === "upi" &&
       !window.confirm(
-        `Check your UPI app first.\n\nDid ₹${r.price} arrive with reference ${r.upiReference}?`
+        `Check your UPI app first.\n\nDid ₹${r.price} arrive with reference ${r.upiReference}?`,
       )
     ) {
       return;
@@ -65,7 +66,7 @@ export default function RequestsTab() {
     if (
       method === "upi" &&
       !window.confirm(
-        `Check your UPI app first.\n\nDid ₹${o.price} arrive for order ${o.trackingCode}?`
+        `Check your UPI app first.\n\nDid ₹${o.price} arrive for order ${o.trackingCode}?`,
       )
     ) {
       return;
@@ -101,9 +102,10 @@ export default function RequestsTab() {
         <div className="panel">
           <h2>All clear</h2>
           <p className="note">
-            No payments to check. New requests appear here by themselves, and the sidebar badge
-            and sound tell you when one arrives.
-            {unpaid.length > 0 && ` ${unpaid.length} order(s) are not paid yet, see below.`}
+            No payments to check. New requests appear here by themselves, and
+            the sidebar badge and sound tell you when one arrives.
+            {unpaid.length > 0 &&
+              ` ${unpaid.length} order(s) are not paid yet, see below.`}
           </p>
         </div>
       )}
@@ -119,13 +121,16 @@ export default function RequestsTab() {
                 <strong>{r.trackingCode}</strong>
                 <span>
                   <span className="tag">{isUpi ? "UPI" : "Cash"}</span>{" "}
-                  {r.atCounterAt && <span className="tag urgent">AT COUNTER</span>}{" "}
+                  {r.atCounterAt && (
+                    <span className="tag urgent">AT COUNTER</span>
+                  )}{" "}
                   {r.urgent && <span className="tag urgent">URGENT</span>}
                 </span>
               </div>
 
               <div>
-                <strong>{r.customerName}</strong> <span className="note">{r.phone}</span>
+                <strong>{r.customerName}</strong>{" "}
+                <span className="note">{r.phone}</span>
               </div>
 
               <div className="req-amount">{rupees(r.price)}</div>
@@ -134,18 +139,18 @@ export default function RequestsTab() {
                 <div className="order-note">
                   UPI reference: <strong>{r.upiReference}</strong>
                   <br />
-                  Look for exactly {rupees(r.price)} in your UPI app with this reference.
+                  Look for exactly {rupees(r.price)} in your UPI app with this
+                  reference.
                 </div>
               ) : (
                 <div className="order-note">
-                  The customer is at the counter. Take {rupees(r.price)} in cash.
+                  The customer is at the counter. Take {rupees(r.price)} in
+                  cash.
                 </div>
               )}
 
               <div className="note">
-                {r.printPages || r.pages} of {r.pages} pages
-                {r.pageRange ? ` (${r.pageRange})` : ""} × {r.copies} · {r.size} ·{" "}
-                {r.color ? "Color" : "B/W"} · {r.doubleSided ? "Double" : "Single"}-sided
+                {orderSummary(r)}
                 {r.stapling ? " · Stapling" : ""}
                 {r.binding ? " · Binding" : ""}
               </div>
@@ -197,7 +202,10 @@ export default function RequestsTab() {
               ) : (
                 <div className="actions">
                   {r.filePublicId && (
-                    <button className="small ghost" onClick={() => openFile(r._id)}>
+                    <button
+                      className="small ghost"
+                      onClick={() => openFile(r._id)}
+                    >
                       Preview file
                     </button>
                   )}
@@ -224,8 +232,8 @@ export default function RequestsTab() {
         <div className="panel">
           <h2>Not paid yet ({unpaid.length})</h2>
           <p className="note">
-            These customers ordered but haven't told the shop they paid. If one is at the counter,
-            take their payment here.
+            These customers ordered but haven't told the shop they paid. If one
+            is at the counter, take their payment here.
           </p>
           {unpaid.map((o) => (
             <div className="unpaid-row" key={o._id}>
@@ -234,8 +242,9 @@ export default function RequestsTab() {
                 <span className="note">{o.phone}</span>
                 <div className="note">
                   {rupees(o.price)} · {o.source}
-                  {o.paymentMethod ? ` · chose ${o.paymentMethod}` : ""} · ordered{" "}
-                  {waited(o.createdAt, now)} ago{expiresIn(o.expiresAt, now)}
+                  {o.paymentMethod ? ` · chose ${o.paymentMethod}` : ""} ·
+                  ordered {waited(o.createdAt, now)} ago
+                  {expiresIn(o.expiresAt, now)}
                 </div>
               </div>
               <div className="actions">

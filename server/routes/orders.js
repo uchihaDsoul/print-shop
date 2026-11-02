@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const Order = require("../models/Order");
-const { calculatePrice, getPricing, pickSize } = require("../utils/pricing");
+const { calculatePrice, getPricing, getPublicPricing, pickSize } = require("../utils/pricing");
 const { getSettings } = require("../utils/settings");
 const { STATUSES, NEEDS_PAYMENT } = require("../utils/orderFlow");
 const { saveFile, getTempUrl, deleteFile } = require("../utils/storage");
@@ -38,6 +38,17 @@ function makeTrackingCode() {
 
 // Deletes the order's file from Cloudinary (the caller saves the order)
 async function removeOrderFile(order) {
+  // the customer's kept passport photo is deleted with the order
+  if (order.passportSourceId) {
+    try {
+      await deleteFile(order.passportSourceId, order.passportSourceType);
+      order.passportSourceId = "";
+      order.passportSourceType = "";
+      order.passportSourceFormat = "";
+    } catch (e) {
+      console.error("Passport source delete failed:", e.message);
+    }
+  }
   if (!order.filePublicId) return;
   try {
     await deleteFile(order.filePublicId, order.fileResourceType);
@@ -190,7 +201,7 @@ async function createOrder(body, source, file, staffUser) {
 
 // Public price list
 router.get("/rates", (req, res) => {
-  res.json(getPricing());
+  res.json(getPublicPricing());
 });
 
 // Price preview (saves nothing)

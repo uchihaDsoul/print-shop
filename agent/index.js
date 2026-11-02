@@ -5,7 +5,7 @@ const { call } = require("./api");
 const { printJob } = require("./printer");
 const log = require("./log");
 
-const VERSION = "0.2.0";
+const VERSION = "0.3.0";
 const HEARTBEAT_MS = 10 * 1000;
 const PRINTERS_MS = 60 * 1000;
 const JOBS_MS = 5 * 1000;

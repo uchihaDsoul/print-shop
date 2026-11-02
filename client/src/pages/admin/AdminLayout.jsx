@@ -37,7 +37,7 @@ const ROLE_LABEL = {
   manager: "Store manager",
 };
 
-function Shell() {
+function Shell({ theme, toggleTheme }) {
   const { user, logout } = useAuth();
   const { requests, soundOn, needsClick, enableSound, disableSound } =
     useRequests();
@@ -116,13 +116,23 @@ function Shell() {
               <small>{ROLE_LABEL[user.role] || user.role}</small>
             </span>
           </div>
-          <button
-            className="small ghost"
-            onClick={soundOn ? disableSound : enableSound}
-          >
-            {soundOn ? "Mute alerts" : "Turn on alert sound"}
-          </button>
-          <button className="small ghost" onClick={logout}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+            <button
+              className="small ghost"
+              onClick={soundOn ? disableSound : enableSound}
+              style={{ flex: 1 }}
+            >
+              {soundOn ? "Mute" : "Sound on"}
+            </button>
+            <button 
+              className="small ghost theme-toggle" 
+              onClick={toggleTheme} 
+              title="Toggle theme"
+            >
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
+          </div>
+          <button className="small ghost" onClick={logout} style={{ marginTop: "0.5rem", width: "100%" }}>
             <Icon name="logout" size={16} /> Log out
           </button>
         </div>
@@ -159,10 +169,10 @@ function Shell() {
   );
 }
 
-export default function AdminLayout() {
+export default function AdminLayout({ theme, toggleTheme }) {
   return (
     <RequestsProvider>
-      <Shell />
+      <Shell theme={theme} toggleTheme={toggleTheme} />
     </RequestsProvider>
   );
 }

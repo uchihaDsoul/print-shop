@@ -1,6 +1,6 @@
 const express = require("express");
 const { requireAuth, requireRole } = require("../middleware/auth");
-const { savePricing } = require("../utils/pricing");
+const { getPricing, savePricing } = require("../utils/pricing");
 const { getSettings, saveSettings } = require("../utils/settings");
 
 const router = express.Router();
@@ -29,6 +29,9 @@ router.put("/shop", ...boss, async (req, res) => {
     res.status(400).json({ error: err.message });
   }
 });
+
+// Full prices, including private paper costs (admin and super admin only)
+router.get("/pricing", ...boss, (req, res) => res.json(getPricing()));
 
 router.put("/pricing", ...boss, async (req, res) => {
   try {

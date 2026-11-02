@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { getQuote, placeOrder, countPages, trackOrder } from "../api";
+import { getQuote, placeOrder, countPages, trackOrder, getPublicSettings } from "../api";
 import PriceList from "../components/PriceList";
 import ShopInfo from "../components/ShopInfo";
 import PaymentPanel from "../components/PaymentPanel";
@@ -39,20 +39,45 @@ export default function OrderPage() {
   const rates = useRates();
   const sizes = rates?.enabledSizes || ["A4"];
 
-  const [mode, setMode] = useState("paper"); // "paper" or "photo"
+  const [mode, setMode] = useState("paper"); 
   const [form, setForm] = useState(initialForm);
   const [file, setFile] = useState(null);
-  const [fileKey, setFileKey] = useState(0); // changing this empties the file input
+  const [fileKey, setFileKey] = useState(0); 
   const [counting, setCounting] = useState(false);
   const [price, setPrice] = useState(0);
   const [printPages, setPrintPages] = useState(0);
   const [rangeError, setRangeError] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [placed, setPlaced] = useState(null); // the order that was just created
-  const [orderCode, setOrderCode] = useState(""); // the tracking code, kept safe separately
-  const [showPay, setShowPay] = useState(false); // is the payment popup open?
+  const [placed, setPlaced] = useState(null); 
+  const [orderCode, setOrderCode] = useState(""); 
+  const [showPay, setShowPay] = useState(false); 
   const [copied, setCopied] = useState(false);
+  
+  // Safe defaults so the page never renders blank
+  const [publicSettings, setPublicSettings] = useState({
+    guestShowPaper: true,
+    guestShowPhoto: true,
+    guestShowStapling: true,
+    guestShowBinding: true,
+    guestShowUrgent: true,
+    guestShowDoubleSided: false,
+    guestShowCash: true,
+    guestShowUPI: true,
+  });
+
+  // Fetch the live toggles from the backend using your actual api.js function
+  useEffect(() => {
+    getPublicSettings()
+      .then((data) => {
+        if (data && typeof data.guestShowPaper !== 'undefined') {
+          setPublicSettings(data);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load settings from server:", err);
+      });
+  }, []);
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
@@ -88,7 +113,6 @@ export default function OrderPage() {
     }
   }
 
-  // ask the server for the price whenever the print options change
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -117,7 +141,6 @@ export default function OrderPage() {
     form.urgent,
   ]);
 
-  // merge an update into the open order, and never lose the tracking code
   function updatePlaced(next) {
     setPlaced((prev) => ({
       ...prev,
@@ -126,7 +149,6 @@ export default function OrderPage() {
     }));
   }
 
-  // after payment is sent, follow the order's status so the screen updates by itself
   useEffect(() => {
     if (!placed) return;
     if (["collected", "rejected", "cancelled"].includes(placed.status)) return;
@@ -140,7 +162,6 @@ export default function OrderPage() {
     return () => clearInterval(timer);
   }, [placed?.trackingCode, placed?.status, orderCode]);
 
-  // shared by paper orders and photo orders: show the order and open the payment popup
   function openPayment(order) {
     setOrderCode(order?.trackingCode || "");
     setPlaced(order);
@@ -174,7 +195,6 @@ export default function OrderPage() {
 
   function closeModal() {
     setShowPay(false);
-    // finished orders don't need the banner any more
     if (placed && ["collected", "rejected", "cancelled"].includes(placed.status)) {
       setPlaced(null);
       setOrderCode("");
@@ -194,6 +214,17 @@ export default function OrderPage() {
   const shownCode = placed?.trackingCode || orderCode;
   const paying = placed?.status === "awaiting_payment";
 
+  // Safely force the mode without causing an infinite loop
+  useEffect(() => {
+    if (publicSettings) {
+      if (!publicSettings.guestShowPaper && mode === "paper") {
+        setMode(publicSettings.guestShowPhoto ? "photo" : "none");
+      } else if (!publicSettings.guestShowPhoto && mode === "photo") {
+        setMode(publicSettings.guestShowPaper ? "paper" : "none");
+      }
+    }
+  }, [publicSettings, mode]);
+
   return (
     <>
       <div className="hero">
@@ -201,7 +232,6 @@ export default function OrderPage() {
         <p>Upload your file, pick your options, collect it at the shop.</p>
       </div>
 
-      {/* shown when the popup is closed but an order is still open */}
       {placed && !showPay && (
         <div className="card pending-order">
           <div>
@@ -232,34 +262,45 @@ export default function OrderPage() {
         </div>
       )}
 
-      {/* what are we printing? */}
-      <div className="card">
-        <h3>What would you like to print?</h3>
-        <div className="choice-grid">
-          <button
-            type="button"
-            className={"choice" + (mode === "paper" ? " on" : "")}
-            onClick={() => setMode("paper")}
-          >
-            Paper print
-            <small>Documents, PDFs, notes and images</small>
-          </button>
-          <button
-            type="button"
-            className={"choice" + (mode === "photo" ? " on" : "")}
-            onClick={() => setMode("photo")}
-          >
-            Photo print
-            <small>Full A4 photos and passport photos</small>
-          </button>
+      {/* Show the choice grid if at least one service is enabled */}
+      {publicSettings && (publicSettings.guestShowPaper || publicSettings.guestShowPhoto) ? (
+        <div className="card">
+          <h3>What would you like to print?</h3>
+          <div className="choice-grid">
+            {publicSettings.guestShowPaper && (
+              <button
+                type="button"
+                className={"choice" + (mode === "paper" ? " on" : "")}
+                onClick={() => setMode("paper")}
+              >
+                Paper print
+                <small>Documents, PDFs, notes and images</small>
+              </button>
+            )}
+            {publicSettings.guestShowPhoto && (
+              <button
+                type="button"
+                className={"choice" + (mode === "photo" ? " on" : "")}
+                onClick={() => setMode("photo")}
+              >
+                Photo print
+                <small>Full A4 photos and passport photos</small>
+              </button>
+            )}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="card">
+          <h3>Printing is currently paused</h3>
+          <p className="note">The shop is not accepting online orders at this moment. Please check back later.</p>
+        </div>
+      )}
 
-      {mode === "photo" && <PhotoOrder onPlaced={openPayment} />}
+      {mode === "photo" && publicSettings?.guestShowPhoto && <PhotoOrder onPlaced={openPayment} />}
 
-      {mode === "paper" && (
+      {mode === "paper" && publicSettings?.guestShowPaper && (
         <form className="card" onSubmit={handleSubmit}>
-          <h3>1. Your details</h3>
+          <h3>Your details</h3>
           <div className="row">
             <label>
               Your name
@@ -352,29 +393,48 @@ export default function OrderPage() {
             Color print
           </label>
 
-          <h3>4. Finishing</h3>
-          <label className="check">
-            <input
-              type="checkbox"
-              name="stapling"
-              checked={form.stapling}
-              onChange={handleChange}
-            />
-            Stapling
-          </label>
-          <label className="check">
-            <input
-              type="checkbox"
-              name="binding"
-              checked={form.binding}
-              onChange={handleChange}
-            />
-            Spiral binding
-          </label>
-          <label className="check">
-            <input type="checkbox" name="urgent" checked={form.urgent} onChange={handleChange} />
-            Urgent (priority printing)
-          </label>
+          {(publicSettings?.guestShowStapling || publicSettings?.guestShowBinding || publicSettings?.guestShowUrgent || publicSettings?.guestShowDoubleSided) && (
+            <h3>4. Finishing</h3>
+          )}
+          {publicSettings?.guestShowStapling && (
+            <label className="check">
+              <input
+                type="checkbox"
+                name="stapling"
+                checked={form.stapling}
+                onChange={handleChange}
+              />
+              Stapling
+            </label>
+          )}
+          {publicSettings?.guestShowBinding && (
+            <label className="check">
+              <input
+                type="checkbox"
+                name="binding"
+                checked={form.binding}
+                onChange={handleChange}
+              />
+              Spiral binding
+            </label>
+          )}
+          {publicSettings?.guestShowDoubleSided && (
+            <label className="check">
+              <input
+                type="checkbox"
+                name="doubleSided"
+                checked={form.doubleSided}
+                onChange={handleChange}
+              />
+              Double-sided printing (Assisted flip)
+            </label>
+          )}
+          {publicSettings?.guestShowUrgent && (
+            <label className="check">
+              <input type="checkbox" name="urgent" checked={form.urgent} onChange={handleChange} />
+              Urgent (priority printing)
+            </label>
+          )}
           <label>
             Note for the shop (optional)
             <textarea
@@ -407,7 +467,6 @@ export default function OrderPage() {
       <PriceList />
       <ShopInfo />
 
-      {/* payment popup */}
       <Modal open={Boolean(placed) && showPay} onClose={closeModal} title="Payment">
         {placed && (
           <div className="modal-body">
@@ -457,7 +516,7 @@ export default function OrderPage() {
               <p className="error">{placed.rejectReason}</p>
             )}
 
-            <PaymentPanel order={{ ...placed, trackingCode: shownCode }} onUpdate={updatePlaced} />
+            <PaymentPanel order={{ ...placed, trackingCode: shownCode }} onUpdate={updatePlaced} settings={publicSettings} />
 
             {paying ? (
               <p className="note">
