@@ -28,12 +28,7 @@ import { useState, useEffect } from "react";
 
 const BOSS = ["admin", "superadmin"];
 
-function PublicLayout() {
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", "dark");
-    return () => document.documentElement.removeAttribute("data-theme");
-  }, []);
-
+function PublicLayout({ theme, toggleTheme }) {
   return (
     <div className="app">
       <header className="topbar">
@@ -49,6 +44,9 @@ function PublicLayout() {
               New order
             </NavLink>
             <NavLink to="/track">Track order</NavLink>
+            <button className="theme-toggle" onClick={toggleTheme} title="Toggle theme">
+              {theme === "dark" ? "☀️" : "🌙"}
+            </button>
           </nav>
         </div>
       </header>
@@ -64,6 +62,7 @@ function PublicLayout() {
     </div>
   );
 }
+
 // /admin lands on Requests for managers and on the Dashboard for bosses
 function AdminHome() {
   const { user } = useAuth();
@@ -76,9 +75,20 @@ function AdminHome() {
 }
 
 export default function App() {
+  const [theme, setTheme] = useState(() => localStorage.getItem("theme") || "dark");
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const toggleTheme = () => {
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
+  };
+
   return (
     <Routes>
-      <Route element={<PublicLayout />}>
+      <Route element={<PublicLayout theme={theme} toggleTheme={toggleTheme} />}>
         <Route path="/" element={<OrderPage />} />
         <Route path="/track" element={<TrackPage />} />
         <Route path="/track/:code" element={<TrackPage />} />
@@ -90,7 +100,8 @@ export default function App() {
         path="/admin"
         element={
           <RequireRole>
-            <AdminLayout />
+            {/* Pass theme props to admin layout so it can render the toggle too if you want */}
+            <AdminLayout theme={theme} toggleTheme={toggleTheme} />
           </RequireRole>
         }
       >
@@ -130,7 +141,6 @@ export default function App() {
             </RequireRole>
           }
         />
-
         <Route path="queue" element={<PrintQueueTab />} />
         <Route path="printers" element={<PrintersTab />} />
         <Route

@@ -1,6 +1,16 @@
 const Setting = require("../models/Setting");
 
 const DEFAULTS = {
+  // guest feature toggles
+  guestShowPaper: true,
+  guestShowPhoto: true,
+  guestShowStapling: true,
+  guestShowBinding: true,
+  guestShowUrgent: true,
+  guestShowDoubleSided: false, // Parked by default based on Phase 5 Part A
+  guestShowCash: true,
+  guestShowUPI: true,
+
   // payments
   upiId: "",
   upiPayeeName: "",
@@ -52,6 +62,15 @@ function validateSettings(input) {
   }
 
   return {
+    guestShowPaper: Boolean(i.guestShowPaper ?? DEFAULTS.guestShowPaper),
+    guestShowPhoto: Boolean(i.guestShowPhoto ?? DEFAULTS.guestShowPhoto),
+    guestShowStapling: Boolean(i.guestShowStapling ?? DEFAULTS.guestShowStapling),
+    guestShowBinding: Boolean(i.guestShowBinding ?? DEFAULTS.guestShowBinding),
+    guestShowUrgent: Boolean(i.guestShowUrgent ?? DEFAULTS.guestShowUrgent),
+    guestShowDoubleSided: Boolean(i.guestShowDoubleSided ?? DEFAULTS.guestShowDoubleSided),
+    guestShowCash: Boolean(i.guestShowCash ?? DEFAULTS.guestShowCash),
+    guestShowUPI: Boolean(i.guestShowUPI ?? DEFAULTS.guestShowUPI),
+
     upiId,
     upiPayeeName: text(i.upiPayeeName, "Payee name", 60),
     waitMessage: text(i.waitMessage, "Waiting message", 200) || DEFAULTS.waitMessage,

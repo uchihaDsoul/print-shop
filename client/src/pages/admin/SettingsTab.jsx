@@ -104,6 +104,28 @@ export default function SettingsTab() {
       </header>
 
       <form className="card" onSubmit={handleSave}>
+        <h3>Guest Page Feature Toggles</h3>
+        <p className="note">Use these switches to instantly show or hide features on the public-facing guest order page.</p>
+        <div className="row">
+          <div className="col">
+            <strong>Main Services</strong>
+            {check("guestShowPaper", "Paper print")}
+            {check("guestShowPhoto", "Photo print")}
+          </div>
+          <div className="col">
+            <strong>Finishing Options</strong>
+            {check("guestShowStapling", "Stapling")}
+            {check("guestShowBinding", "Spiral binding")}
+            {check("guestShowUrgent", "Urgent processing")}
+            {check("guestShowDoubleSided", "Double-sided (Assisted)")}
+          </div>
+          <div className="col">
+            <strong>Payment Methods</strong>
+            {check("guestShowCash", "Cash at counter")}
+            {check("guestShowUPI", "UPI QR code")}
+          </div>
+        </div>
+
         <h3>Payments</h3>
         <div className="row">
           <label>

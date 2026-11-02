@@ -12,6 +12,15 @@ const boss = [requireAuth, requireRole("admin", "superadmin")];
 router.get("/public", (req, res) => {
   const s = getSettings();
   res.json({
+    guestShowPaper: s.guestShowPaper,
+    guestShowPhoto: s.guestShowPhoto,
+    guestShowStapling: s.guestShowStapling,
+    guestShowBinding: s.guestShowBinding,
+    guestShowUrgent: s.guestShowUrgent,
+    guestShowDoubleSided: s.guestShowDoubleSided,
+    guestShowCash: s.guestShowCash,
+    guestShowUPI: s.guestShowUPI,
+    
     waitMessage: s.waitMessage,
     upiId: s.upiId,
     upiPayeeName: s.upiPayeeName,
