@@ -1,7 +1,6 @@
 // Layout maths for passport sheets. It mirrors capacity() in server/utils/photo.js,
 // so what the customer sees is what the server builds.
 
-// Same values as GAP and MARGIN in server/utils/photo.js. If P2 changes the spacing, change it here too.
 export const SPACING = { margin: 5, gap: 3 }; // millimetres
 
 export const PAPER_MM = {
@@ -11,11 +10,6 @@ export const PAPER_MM = {
   "4x6": { label: "4 x 6 in", w: 101.6, h: 152.4 },
   "5r": { label: "5 x 7 in", w: 127, h: 177.8 },
 };
-
-// The papers offered for passport sheets, with an optional price per sheet in rupees.
-// With no price, the paper area stands in for the cost.
-// Replace this list with your P1 paper catalogue when it has a public endpoint.
-export const OFFERED_PAPERS = [{ key: "4x6" }, { key: "a4" }];
 
 const A4_AREA = 210 * 297;
 
@@ -36,17 +30,16 @@ export function slotLayout(paperKey, photoW, photoH, spacing = SPACING) {
   return sideways.perSheet > upright.perSheet ? sideways : upright;
 }
 
-// The cheapest set of sheets that holds all the photos.
-// Returns { sheets: [{ key, count, perSheet }], room }, where room is the most free slots on one sheet.
+// The cheapest set of sheets that holds all the photos, using ONLY the papers provided
 export function planOrder({
   pieces,
   photoW,
   photoH,
-  papers = OFFERED_PAPERS,
+  papers, // Now strictly required: e.g. [{ key: "a4" }]
   spacing = SPACING,
 }) {
   const n = Math.round(Number(pieces));
-  if (!(n >= 1) || n > 200) return { sheets: [], room: 0 };
+  if (!(n >= 1) || n > 200 || !papers || papers.length === 0) return { sheets: [], room: 0 };
 
   const options = papers
     .map((p) => {
@@ -54,12 +47,12 @@ export function planOrder({
       if (!paper) return null;
       const perSheet = slotLayout(p.key, photoW, photoH, spacing).perSheet;
       const base = p.price ?? (paper.w * paper.h) / A4_AREA;
-      return { key: p.key, perSheet, cost: base + 0.01 }; // the small extra prefers fewer sheets
+      return { key: p.key, perSheet, cost: base + 0.01 };
     })
     .filter((o) => o && o.perSheet > 0);
+    
   if (options.length === 0) return { sheets: [], room: 0 };
 
-  // best[i] = cheapest way to produce i photos
   const best = Array(n + 1).fill(null);
   best[0] = { cost: 0 };
   for (let i = 1; i <= n; i++) {
@@ -77,7 +70,6 @@ export function planOrder({
     sheets.push({ key: best[i].key, count: i - best[i].from, perSheet: best[i].perSheet });
   }
 
-  // big paper first, then the fullest sheets
   const area = (k) => PAPER_MM[k].w * PAPER_MM[k].h;
   sheets.sort((a, b) => area(b.key) - area(a.key) || b.count - a.count);
 
@@ -85,8 +77,8 @@ export function planOrder({
   return { sheets, room };
 }
 
-// "1 x A4 + 2 x 4 x 6 in"
 export function describePlan(plan) {
+  if (!plan || !plan.sheets) return "";
   const counts = {};
   for (const s of plan.sheets) counts[s.key] = (counts[s.key] || 0) + 1;
   return Object.entries(counts)

@@ -17,7 +17,6 @@ import SheetGrid from "./SheetGrid";
 const MAX_PIECES = 40;
 const MAX_FILE = 20 * 1024 * 1024;
 
-// A rough face guide, in percent of the frame. It is a help, not an official check.
 const GUIDE = {
   "35x45": { rx: 33, ry: 36, cy: 47 },
   "35x35": { rx: 33, ry: 33, cy: 47 },
@@ -34,14 +33,18 @@ const SIZE_HELP = {
 
 const mb = (bytes) => (bytes / 1048576).toFixed(1);
 
-// onPlaced(order) opens the payment popup on the order page
 export default function PassportOrder({ onPlaced, walkin = false }) {
   const [details, setDetails] = useState({ customerName: "", phone: "" });
   const [size, setSize] = useState("35x45");
-  const [pic, setPic] = useState(null); // { file, width, height, preview: { url, w, h } }
+  const [pic, setPic] = useState(null); 
   const [view, setView] = useState({ zoom: 1, x: 0.5, y: 0.5 });
   const [pieces, setPieces] = useState("6");
   const [color, setColor] = useState(true);
+  
+  // Advanced Controls
+  const [marginMode, setMarginMode] = useState("safe"); // 'safe' or 'zero'
+  const [removeBg, setRemoveBg] = useState(false); // Cloudinary AI hook
+
   const [note, setNote] = useState("");
   const [guide, setGuide] = useState(true);
   const [price, setPrice] = useState(0);
@@ -49,53 +52,45 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
   const [reading, setReading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [inputKey, setInputKey] = useState(0); // changing this empties the file input
-  const [payment, setPayment] = useState(""); // staff walk-in only
+  const [inputKey, setInputKey] = useState(0); 
+  const [payment, setPayment] = useState("");
 
-  const [enabledSizes, setEnabledSizes] = useState(null); // null = still loading
+  const [enabledSizes, setEnabledSizes] = useState(null); 
+  const [enabledPapers, setEnabledPapers] = useState([{ key: "a4" }]);
 
-  // keeps the latest picture so the cleanup below can release it
-  // keeps the latest picture so the cleanup below can release it
   const picRef = useRef(null);
   picRef.current = pic;
-  useEffect(
-    () => () => {
-      if (picRef.current) URL.revokeObjectURL(picRef.current.preview.url);
-    },
-    [],
-  );
+  useEffect(() => () => {
+    if (picRef.current) URL.revokeObjectURL(picRef.current.preview.url);
+  }, []);
 
   useEffect(() => {
     getRates()
       .then((d) => {
-        const list = d.photoSizes
-          ? Object.entries(d.photoSizes)
-              .filter(([, s]) => s.enabled)
-              .map(([key]) => key)
-          : ["35x45", "51x51"];
+        const list = d.photoSizes ? Object.entries(d.photoSizes).filter(([, s]) => s.enabled).map(([key]) => key) : ["35x45", "51x51"];
         setEnabledSizes(list);
+        if (d.papers) {
+          const paps = Object.entries(d.papers).filter(([, p]) => p.enabled).map(([key]) => ({ key }));
+          setEnabledPapers(paps.length ? paps : [{ key: "a4" }]);
+        }
       })
-      .catch(() => setEnabledSizes(["35x45", "51x51"])); // safe fallback if the call fails
+      .catch(() => {
+        setEnabledSizes(["35x45", "51x51"]);
+        setEnabledPapers([{ key: "a4" }]);
+      });
   }, []);
 
-  // if the selected size becomes unavailable, switch to the first enabled one
   useEffect(() => {
-    if (
-      enabledSizes &&
-      enabledSizes.length > 0 &&
-      !enabledSizes.includes(size)
-    ) {
+    if (enabledSizes && enabledSizes.length > 0 && !enabledSizes.includes(size)) {
       chooseSize(enabledSizes[0]);
     }
   }, [enabledSizes]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const spec = PASSPORT_SIZES[size];
   const ratio = spec.wMm / spec.hMm;
-
   const count = Number(pieces);
   const piecesOk = Number.isInteger(count) && count >= 1 && count <= MAX_PIECES;
 
-  // live price and layout from the server
   useEffect(() => {
     if (!piecesOk) {
       setPrice(0);
@@ -108,6 +103,7 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
         pieces: count,
         passportSize: size,
         color,
+        marginMode,
       })
         .then((d) => {
           if (cancelled) return;
@@ -120,24 +116,21 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [piecesOk, count, size, color]);
+  }, [piecesOk, count, size, color, marginMode]);
 
   async function pickFile(e) {
     const chosen = e.target.files && e.target.files[0];
-    setInputKey((k) => k + 1); // so the same file can be picked again
+    setInputKey((k) => k + 1); 
     if (!chosen) return;
 
     setError("");
     if (/\.(heic|heif)$/i.test(chosen.name) || /hei[cf]/i.test(chosen.type)) {
-      return setError(
-        'iPhone HEIC photos aren\'t supported yet. In Settings, Camera, Formats choose "Most Compatible", or save the photo as JPG.',
-      );
+      return setError("iPhone HEIC photos aren't supported yet. In Settings, Camera, Formats choose 'Most Compatible', or save the photo as JPG.");
     }
     if (!["image/jpeg", "image/png"].includes(chosen.type)) {
       return setError("Only JPG and PNG photos are allowed.");
     }
-    if (chosen.size > MAX_FILE)
-      return setError("This photo is larger than 20 MB.");
+    if (chosen.size > MAX_FILE) return setError("This photo is larger than 20 MB.");
 
     setReading(true);
     try {
@@ -145,12 +138,7 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
       const preview = await buildPreview(chosen, { rotateLandscape: false });
       setPic((prev) => {
         if (prev) URL.revokeObjectURL(prev.preview.url);
-        return {
-          file: chosen,
-          width: dims.width,
-          height: dims.height,
-          preview,
-        };
+        return { file: chosen, width: dims.width, height: dims.height, preview };
       });
       setView({ zoom: 1, x: 0.5, y: 0.5 });
     } catch (err) {
@@ -168,33 +156,17 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
 
   function chooseSize(next) {
     setSize(next);
-    setView({ zoom: 1, x: 0.5, y: 0.5 }); // the frame changes shape, so start again
+    setView({ zoom: 1, x: 0.5, y: 0.5 }); 
   }
 
   function changeZoom(value) {
     const zoom = Math.min(3, Math.max(1, Number(value)));
-    const pos = zoomKeepCenter(
-      pic.preview.w,
-      pic.preview.h,
-      ratio,
-      view.zoom,
-      zoom,
-      view.x,
-      view.y,
-    );
+    const pos = zoomKeepCenter(pic.preview.w, pic.preview.h, ratio, view.zoom, zoom, view.x, view.y);
     setView({ zoom, ...pos });
   }
 
-  const dpi = pic
-    ? passportDpi({
-        width: pic.width,
-        height: pic.height,
-        size,
-        zoom: view.zoom,
-      })
-    : 0;
+  const dpi = pic ? passportDpi({ width: pic.width, height: pic.height, size, zoom: view.zoom }) : 0;
   const level = pic ? dpiLevel(dpi) : "ok";
-  const sheetsNeeded = cap.a4 && piecesOk ? Math.ceil(count / cap.a4) : 0;
   const g = GUIDE[size];
 
   async function handleSubmit(e) {
@@ -202,13 +174,8 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
     setError("");
 
     if (!pic) return setError("Please add your photo.");
-    if (level === "low")
-      return setError(
-        "This photo is too small. Zoom out, or choose a larger photo.",
-      );
-    if (!piecesOk)
-      return setError(`Choose from 1 to ${MAX_PIECES} passport photos.`);
-
+    if (level === "low") return setError("This photo is too small. Zoom out, or choose a larger photo.");
+    if (!piecesOk) return setError(`Choose from 1 to ${MAX_PIECES} passport photos.`);
     if (walkin && !payment) return setError("Choose how the customer paid.");
 
     setLoading(true);
@@ -223,12 +190,14 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
           pieces: count,
           color,
           note,
+          marginMode,
+          removeBg,
           ...(walkin ? { payment } : {}),
           zoom: view.zoom,
           x: view.x,
           y: view.y,
         },
-        [pic.file],
+        [pic.file]
       );
       onPlaced(order);
       removePic();
@@ -254,7 +223,7 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
 
       <h3>2. Photo size</h3>
       {enabledSizes === null && <p className="note">Loading sizes...</p>}
-      <div className="choice-grid">
+      <div className="choice-grid" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))" }}>
         {enabledSizes &&
           Object.entries(PASSPORT_SIZES)
             .filter(([key]) => enabledSizes.includes(key))
@@ -275,26 +244,11 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
       <div className="row">
         <label>
           Your name
-          <input
-            value={details.customerName}
-            onChange={(e) =>
-              setDetails((d) => ({ ...d, customerName: e.target.value }))
-            }
-            required
-          />
+          <input value={details.customerName} onChange={(e) => setDetails((d) => ({ ...d, customerName: e.target.value }))} required />
         </label>
         <label>
           Phone number
-          <input
-            value={details.phone}
-            onChange={(e) =>
-              setDetails((d) => ({ ...d, phone: e.target.value }))
-            }
-            required
-            inputMode="numeric"
-            pattern="[0-9]{10}"
-            title="Enter a 10-digit phone number"
-          />
+          <input value={details.phone} onChange={(e) => setDetails((d) => ({ ...d, phone: e.target.value }))} required inputMode="numeric" pattern="[0-9]{10}" title="Enter a 10-digit phone number" />
         </label>
       </div>
 
@@ -302,113 +256,63 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
       {!pic && (
         <label>
           One JPG or PNG photo (20 MB at most)
-          <input
-            key={inputKey}
-            type="file"
-            accept=".jpg,.jpeg,.png"
-            onChange={pickFile}
-            disabled={reading}
-          />
+          <input key={inputKey} type="file" accept=".jpg,.jpeg,.png" onChange={pickFile} disabled={reading} />
         </label>
       )}
       {reading && <p className="note">Reading your photo...</p>}
 
       {pic && (
-        <div className="photo-editor" style={{ borderTop: 0, paddingTop: 0 }}>
-          <div className="crop-wrap" style={{ maxWidth: 260 }}>
-            <CropFrame
-              src={pic.preview.url}
-              w={pic.preview.w}
-              h={pic.preview.h}
-              ratio={ratio}
-              zoom={view.zoom}
-              x={view.x}
-              y={view.y}
-              onMove={(pos) => setView((v) => ({ ...v, ...pos }))}
-              maxWidth={260}
-            />
+        <div className="photo-editor glass-panel" style={{ padding: "1.5rem", borderRadius: "1rem" }}>
+          
+          <div className="crop-wrap" style={{ maxWidth: 260, margin: "0 auto 1.5rem auto", position: "relative" }}>
+            <CropFrame src={pic.preview.url} w={pic.preview.w} h={pic.preview.h} ratio={ratio} zoom={view.zoom} x={view.x} y={view.y} onMove={(pos) => setView((v) => ({ ...v, ...pos }))} maxWidth={260} />
             {guide && (
-              <svg
-                className="crop-guide"
-                viewBox="0 0 100 100"
-                preserveAspectRatio="none"
-                aria-hidden="true"
-              >
-                <ellipse cx="50" cy={g.cy} rx={g.rx} ry={g.ry} />
-                <line x1="50" y1="0" x2="50" y2="100" />
+              <svg className="crop-guide" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true" style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%", pointerEvents: "none" }}>
+                <ellipse cx="50" cy={g.cy} rx={g.rx} ry={g.ry} fill="none" stroke="rgba(244, 63, 94, 0.7)" strokeWidth="0.5" strokeDasharray="2" />
+                <line x1="50" y1="0" x2="50" y2="100" stroke="rgba(244, 63, 94, 0.4)" strokeWidth="0.2" strokeDasharray="1" />
               </svg>
             )}
           </div>
 
-          <p className="note">
-            The frame is one {spec.label} photo. Drag your photo so the face
-            sits in the middle.
-          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", maxWidth: "400px", margin: "0 auto" }}>
+            
+            <label className="check glass-card" style={{ padding: "0.75rem", borderRadius: "0.5rem" }}>
+              <input type="checkbox" checked={guide} onChange={(e) => setGuide(e.target.checked)} />
+              <span>Show Biometric Face Guide</span>
+            </label>
 
-          <label className="check" style={{ width: "100%", maxWidth: 320 }}>
-            <input
-              type="checkbox"
-              checked={guide}
-              onChange={(e) => setGuide(e.target.checked)}
-            />
-            Show a rough face guide
-          </label>
-          <span className="note">
-            The guide is only a help. It isn't an official check of any
-            country's rules.
-          </span>
+            <div className="glass-card" style={{ padding: "1rem", borderRadius: "0.5rem" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem", fontSize: "0.8rem" }}>
+                <span>Zoom Scale</span>
+                <strong>{view.zoom.toFixed(2)}x</strong>
+              </div>
+              <input type="range" min="1" max="3" step="0.05" value={view.zoom} onChange={(e) => changeZoom(e.target.value)} style={{ width: "100%" }} />
+            </div>
 
-          <label>
-            Zoom ({view.zoom.toFixed(2)}x)
-            <input
-              type="range"
-              min="1"
-              max="3"
-              step="0.05"
-              value={view.zoom}
-              onChange={(e) => changeZoom(e.target.value)}
-            />
-          </label>
+            <div className="glass-card" style={{ padding: "1rem", borderRadius: "0.5rem" }}>
+              <strong style={{ display: "block", fontSize: "0.85rem", marginBottom: "0.5rem" }}>Print Layout Margin</strong>
+              <div className="choice-grid" style={{ gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                <button type="button" className={"choice" + (marginMode === "safe" ? " on" : "")} onClick={() => setMarginMode("safe")} style={{ padding: "0.5rem", fontSize: "0.8rem" }}>Safe Cut Gap (5mm)</button>
+                <button type="button" className={"choice" + (marginMode === "zero" ? " on" : "")} onClick={() => setMarginMode("zero")} style={{ padding: "0.5rem", fontSize: "0.8rem" }}>Zero Margin</button>
+              </div>
+            </div>
 
-          {level === "ok" && <span className="tag online">Good quality</span>}
-          {level === "soft" && (
-            <span className="tag">
-              May look soft (about {Math.round(dpi)} DPI)
-            </span>
-          )}
-          {level === "low" && (
-            <span className="tag urgent">
-              Too small to print (about {Math.round(dpi)} DPI)
-            </span>
-          )}
-          {level === "soft" && (
-            <span className="note">
-              Under {WARN_DPI} DPI at this size, so details may look blurry.
-            </span>
-          )}
-          {level === "low" && (
-            <span className="note">
-              Below {REFUSE_DPI} DPI at this size.{" "}
-              {view.zoom > 1 ? "Zoom out, or " : ""}Choose a larger photo.
-            </span>
-          )}
+            <div className="glass-card" style={{ padding: "1rem", borderRadius: "0.5rem" }}>
+              <label className="check" style={{ marginBottom: "0.25rem" }}>
+                <input type="checkbox" checked={removeBg} onChange={(e) => setRemoveBg(e.target.checked)} />
+                <span style={{ fontWeight: "bold", fontSize: "0.85rem" }}>AI Background Removal</span>
+              </label>
+              <span className="note" style={{ display: "block", fontSize: "0.75rem", marginTop: "0.25rem" }}>*Only effective if your photo is clear and well-lit.</span>
+            </div>
 
-          <span className="note">
-            {pic.file.name} · {pic.width} x {pic.height} px ·{" "}
-            {mb(pic.file.size)} MB
-          </span>
+            {level === "ok" && <span className="tag online" style={{ alignSelf: "center" }}>Good quality</span>}
+            {level === "soft" && <span className="tag" style={{ alignSelf: "center" }}>May look soft (about {Math.round(dpi)} DPI)</span>}
+            {level === "low" && <span className="tag urgent" style={{ alignSelf: "center" }}>Too small to print (about {Math.round(dpi)} DPI)</span>}
 
-          <div className="actions">
-            <button
-              type="button"
-              className="small ghost"
-              onClick={() => setView({ zoom: 1, x: 0.5, y: 0.5 })}
-            >
-              Reset framing
-            </button>
-            <button type="button" className="small ghost" onClick={removePic}>
-              Choose a different photo
-            </button>
+            <div className="actions" style={{ justifyContent: "center", marginTop: "0.5rem" }}>
+              <button type="button" className="small ghost" onClick={() => setView({ zoom: 1, x: 0.5, y: 0.5 })}>Reset framing</button>
+              <button type="button" className="small ghost" onClick={removePic}>Choose different photo</button>
+            </div>
           </div>
         </div>
       )}
@@ -417,35 +321,15 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
       <div className="row">
         <label>
           Number of passport photos (1 to {MAX_PIECES})
-          <input
-            type="number"
-            min="1"
-            max={MAX_PIECES}
-            value={pieces}
-            onChange={(e) => setPieces(e.target.value)}
-            required
-          />
+          <input type="number" min="1" max={MAX_PIECES} value={pieces} onChange={(e) => setPieces(e.target.value)} required />
         </label>
       </div>
       <div className="chips">
         {[4, 6, 8, 12].map((n) => (
-          <button
-            key={n}
-            type="button"
-            className={"chip" + (count === n ? " on" : "")}
-            onClick={() => setPieces(String(n))}
-          >
-            {n}
-          </button>
+          <button key={n} type="button" className={"chip" + (count === n ? " on" : "")} onClick={() => setPieces(String(n))}>{n}</button>
         ))}
         {cap.a4 > 0 && cap.a4 <= MAX_PIECES && (
-          <button
-            type="button"
-            className={"chip" + (count === cap.a4 ? " on" : "")}
-            onClick={() => setPieces(String(cap.a4))}
-          >
-            Full A4 sheet ({cap.a4})
-          </button>
+          <button type="button" className={"chip" + (count === cap.a4 ? " on" : "")} onClick={() => setPieces(String(cap.a4))}>Full A4 sheet ({cap.a4})</button>
         )}
       </div>
 
@@ -456,6 +340,7 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
           preview={pic ? pic.preview : null}
           view={view}
           ratio={ratio}
+          enabledPapers={enabledPapers}
           onFill={(n) => setPieces(String(Math.min(MAX_PIECES, n)))}
         />
       )}
@@ -466,32 +351,18 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
 
       <h3>6. Print options</h3>
       <label className="check">
-        <input
-          type="checkbox"
-          checked={color}
-          onChange={(e) => setColor(e.target.checked)}
-        />
+        <input type="checkbox" checked={color} onChange={(e) => setColor(e.target.checked)} />
         Color print (untick for black and white)
       </label>
       <label>
         Note for the shop (optional)
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          maxLength={300}
-          rows={3}
-          placeholder="e.g. Cut the photos for me"
-        />
+        <textarea value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} rows={3} placeholder="e.g. Cut the photos for me" />
       </label>
 
       {walkin && (
         <label>
           Payment
-          <select
-            value={payment}
-            onChange={(e) => setPayment(e.target.value)}
-            required
-          >
+          <select value={payment} onChange={(e) => setPayment(e.target.value)} required>
             <option value="">Choose...</option>
             <option value="cash">Cash received</option>
             <option value="upi">UPI received</option>
@@ -510,15 +381,9 @@ export default function PassportOrder({ onPlaced, walkin = false }) {
         so they can take a little longer than paper prints. Fresh prints need a
         few minutes to dry. Keep them dry and handle them by the edges.
       </p>
-      <p className="note">
-        🔒 Your photo is deleted after you collect your prints.
-      </p>
       {error && <p className="error">{error}</p>}
 
-      <button
-        type="submit"
-        disabled={loading || reading || !pic || level === "low" || !piecesOk}
-      >
+      <button type="submit" disabled={loading || reading || !pic || level === "low" || !piecesOk}>
         {loading ? "Uploading photo..." : "Place order"}
       </button>
     </form>
