@@ -1,184 +1,130 @@
-import { useEffect, useState } from "react";
-import { QRCodeSVG } from "qrcode.react";
-import {
-  getPublicSettings,
-  submitUpi,
-  chooseCash,
-  atCounter,
-  cancelOrder,
-} from "../api";
+import { useState } from "react";
+import { submitUpi, atCounter } from "../api";
+import QRCode from "react-qr-code";
+import { SHOP } from "../shopConfig";
 
-export default function PaymentPanel({ order, onUpdate }) {
-  const [settings, setSettings] = useState(null);
-  const [method, setMethod] = useState(order.paymentMethod || "");
-  const [reference, setReference] = useState("");
-  const [busy, setBusy] = useState(false);
+export default function PaymentPanel({ order, onUpdate, settings }) {
+  const [method, setMethod] = useState(""); // "upi" or "cash"
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [ref, setRef] = useState("");
 
-  useEffect(() => {
-    getPublicSettings()
-      .then(setSettings)
-      .catch(() => setSettings({}));
-  }, []);
-
-  async function run(action) {
+  async function handleConfirm(e) {
+    if (e) e.preventDefault();
     setError("");
-    setBusy(true);
+    setSubmitting(true);
     try {
-      onUpdate(await action());
+      let updated;
+      if (method === "upi") {
+        updated = await submitUpi(order.trackingCode, ref);
+      } else if (method === "cash") {
+        updated = await atCounter(order.trackingCode);
+      }
+      if (updated) onUpdate(updated);
     } catch (err) {
       setError(err.message);
     } finally {
-      setBusy(false);
+      setSubmitting(false);
     }
   }
 
-  const code = order.trackingCode;
-  const deadline = order.expiresAt
-    ? new Date(order.expiresAt).toLocaleTimeString("en-IN", {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    : "";
-
-  // 1) the customer has paid or arrived, and the shop is checking
-  if (order.status === "awaiting_confirmation") {
-    return (
-      <div className="pay">
-        <h3>Waiting for confirmation</h3>
-        <p>
-          {order.paymentMethod === "cash"
-            ? "The shop knows you're at the counter. Please pay the manager."
-            : settings?.waitMessage ||
-              "The shop will confirm your payment shortly."}
-        </p>
-        {order.paymentMethod === "upi" && (
-          <p className="note">
-            Your reference number was received. Printing starts after the shop
-            confirms it.
-          </p>
-        )}
-      </div>
-    );
-  }
+  // Use toggles if provided, otherwise default to showing both
+  const showCash = settings ? settings.guestShowCash : true;
+  const showUPI = settings ? settings.guestShowUPI : true;
 
   if (order.status !== "awaiting_payment") return null;
 
-  const upiId = settings?.upiId;
-  const amount = Number(order.price).toFixed(2);
-  const link = upiId
-    ? `upi://pay?pa=${upiId}&pn=${encodeURIComponent(settings.upiPayeeName || "Print shop")}` +
-      `&am=${amount}&cu=INR&tn=${encodeURIComponent("Order " + code)}`
-    : "";
-
   return (
-    <div className="pay">
-      <h3>How would you like to pay?</h3>
-
-      <div className="method">
-        <button
-          type="button"
-          className={"chip" + (method === "upi" ? " on" : "")}
-          onClick={() => setMethod("upi")}
-        >
-          Pay by UPI
-        </button>
-        <button
-          type="button"
-          className={"chip" + (method === "cash" ? " on" : "")}
-          onClick={() => {
-            setMethod("cash");
-            if (order.paymentMethod !== "cash") run(() => chooseCash(code));
-          }}
-        >
-          Pay cash at the shop
-        </button>
-      </div>
-
-      {method === "upi" && !settings && <p className="note">Loading...</p>}
-
-      {method === "upi" && settings && !upiId && (
-        <p className="error">
-          UPI payment isn't set up yet. Please pay cash at the shop.
-        </p>
-      )}
-
-      {method === "upi" && upiId && (
-        <>
-          <div className="qr">
-            <QRCodeSVG value={link} size={190} />
-          </div>
-          <p>
-            Scan with any UPI app and pay exactly <strong>₹{amount}</strong>.
-          </p>
-          <div className="btn-row" style={{ justifyContent: "center" }}>
-            <a className="btn" href={link}>
-              Open UPI app
-            </a>
-          </div>
-          <label>
-            After paying, enter the 12-digit UPI reference number
-            <input
-              value={reference}
-              onChange={(e) =>
-                setReference(e.target.value.replace(/\D/g, "").slice(0, 12))
-              }
-              inputMode="numeric"
-              placeholder="e.g. 412345678901"
-              autoComplete="off"
-            />
-          </label>
-          <p className="note">
-            You'll find it in your payment app as "UPI Ref No." or "UTR". The
-            shop checks it against their bank before printing.
-          </p>
-          <button
-            type="button"
-            disabled={busy || reference.length !== 12}
-            onClick={() => run(() => submitUpi(code, reference))}
-          >
-            {busy ? "Sending..." : "I've paid"}
-          </button>
-        </>
+    <div className="payment-panel">
+      {!method && (
+        <div className="payment-choices">
+          {showUPI && (
+            <button type="button" onClick={() => setMethod("upi")}>
+              Pay with UPI
+              <small>Scan a QR code</small>
+            </button>
+          )}
+          {showCash && (
+            <button type="button" onClick={() => setMethod("cash")}>
+              Pay with cash
+              <small>At the counter</small>
+            </button>
+          )}
+          {!showUPI && !showCash && (
+            <p className="note">No payment methods are currently available. Please see a manager.</p>
+          )}
+        </div>
       )}
 
       {method === "cash" && (
-        <>
+        <div className="cash-flow">
           <p>
-            Come to the shop and show your tracking code <strong>{code}</strong>
-            . When you're at the counter, tap the button below so the manager
-            knows you're there.
+            Please give <strong>₹{order.price}</strong> to the manager at the counter. They will
+            confirm it on their screen to start printing.
           </p>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => run(() => atCounter(code))}
-          >
-            {busy ? "Sending..." : "I'm at the counter"}
-          </button>
-        </>
+          <div className="actions">
+            <button
+              type="button"
+              className="small ghost"
+              onClick={() => setMethod("")}
+              disabled={submitting}
+            >
+              Back
+            </button>
+            <button type="button" className="small" onClick={handleConfirm} disabled={submitting}>
+              {submitting ? "Telling shop..." : "I'm at the counter"}
+            </button>
+          </div>
+          {error && <p className="error">{error}</p>}
+        </div>
       )}
 
-      {deadline && (
-        <p className="note">
-          Please pay before {deadline}, or this order is cancelled.
-        </p>
+      {method === "upi" && (
+        <form className="upi-flow" onSubmit={handleConfirm}>
+          <div className="qr-wrap">
+            <QRCode
+              value={`upi://pay?pa=${settings?.upiId || SHOP.upiId}&pn=${encodeURIComponent(
+                settings?.upiPayeeName || SHOP.name
+              )}&tr=${order.trackingCode}&am=${order.price}&cu=INR`}
+              size={180}
+            />
+          </div>
+          <p className="note">
+            Scan this with PhonePe, Google Pay or Paytm to pay <strong>₹{order.price}</strong>.
+          </p>
+
+          <label>
+            12-digit UPI reference number (UTR)
+            <input
+              value={ref}
+              onChange={(e) => setRef(e.target.value)}
+              required
+              inputMode="numeric"
+              pattern="[0-9]{12}"
+              title="Enter the 12-digit number from your payment app"
+              placeholder="e.g. 312345678901"
+            />
+          </label>
+
+          <div className="actions">
+            <button
+              type="button"
+              className="small ghost"
+              onClick={() => {
+                setMethod("");
+                setRef("");
+              }}
+              disabled={submitting}
+            >
+              Back
+            </button>
+            <button className="small" type="submit" disabled={submitting}>
+              {submitting ? "Sending..." : "Confirm payment"}
+            </button>
+          </div>
+          {error && <p className="error">{error}</p>}
+        </form>
       )}
-
-      <button
-        type="button"
-        className="linklike"
-        disabled={busy}
-        onClick={() => {
-          if (window.confirm("Cancel this order? Your file will be deleted.")) {
-            run(() => cancelOrder(code));
-          }
-        }}
-      >
-        Cancel this order
-      </button>
-
-      {error && <p className="error">{error}</p>}
     </div>
   );
 }
