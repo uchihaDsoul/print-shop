@@ -1,0 +1,16 @@
+{
+  "name": "print-agent-2.0",
+  "version": "2.0.0",
+  "description": "Print Shop Local Agent 2.0 Desktop Companion",
+  "main": "../agent-gui.js",
+  "private": true,
+  "scripts": {
+    "start": "node ../index.js",
+    "gui": "node ../node_modules/electron/cli.js ..",
+    "headless": "node ../index.js --headless",
+    "pair": "node ../pair.js",
+    "autostart:on": "powershell -ExecutionPolicy Bypass -File ../scripts/register-startup.ps1",
+    "autostart:off": "powershell -ExecutionPolicy Bypass -File ../scripts/unregister-startup.ps1",
+    "nosleep": "powershell -ExecutionPolicy Bypass -File ../scripts/set-power-plan.ps1"
+  }
+}

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Print Shop Local Agent</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon-wrapper">
+          <img id="app-logo" src="icon.png" alt="Print Shop Logo" class="brand-icon" />
+          <span id="header-pulse" class="status-pulse-dot online"></span>
+        </div>
+        <div class="brand-text">
+          <div class="title-row">
+            <h1>Print Shop Agent</h1>
+            <span class="version-tag">v2.0</span>
+          </div>
+          <div class="subtitle-row">
+            <span id="pc-name" class="pc-name">Loading...</span>
+            <span class="bullet">•</span>
+            <span id="server-address" class="server-address">Connecting...</span>
+          </div>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="btn-minimize" class="icon-btn" title="Minimize to Tray" aria-label="Minimize to System Tray">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Live Status Banner -->
+    <section class="status-banner" id="status-banner">
+      <div class="status-indicator">
+        <span id="status-badge" class="badge badge-connecting">Connecting</span>
+        <span id="status-text" class="status-desc">Initializing print shop companion...</span>
+      </div>
+      <div class="heartbeat-indicator" title="Server Heartbeat Status">
+        <span class="heartbeat-pulse"></span>
+        <span id="last-ping">Pinging...</span>
+      </div>
+    </section>
+
+    <!-- Stats Bar -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="stat-printed">0</div>
+        <div class="stat-label">Jobs Printed</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-printers">0</div>
+        <div class="stat-label">Active Printers</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="stat-uptime">00:00:00</div>
+        <div class="stat-label">Uptime</div>
+      </div>
+    </div>
+
+    <!-- Active Job Monitor Card -->
+    <section class="active-job-section" id="active-job-section">
+      <div class="section-title">
+        <span>Current Print Job</span>
+        <span id="job-status-pill" class="pill-idle">IDLE</span>
+      </div>
+      <div id="job-card-content" class="job-card idle">
+        <div class="idle-placeholder">
+          <svg class="idle-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 6 2 18 2 18 9"></polyline>
+            <path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path>
+            <rect x="6" y="14" width="12" height="8"></rect>
+          </svg>
+          <p>Listening for cloud print orders every 5s</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Quick Tool Actions -->
+    <div class="quick-toolbar">
+      <button id="btn-poll-now" class="action-btn secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+        Check Jobs Now
+      </button>
+      <button id="btn-refresh-printers" class="action-btn secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="1 4 1 10 7 10"></polyline><polyline points="23 20 23 14 17 14"></polyline><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"></path></svg>
+        Rescan Printers
+      </button>
+      <button id="btn-open-logs" class="action-btn secondary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Log Folder
+      </button>
+    </div>
+
+    <!-- Tabs Navigation -->
+    <nav class="tabs-nav">
+      <button class="tab-btn active" data-tab="logs">
+        <span>Activity Log</span>
+      </button>
+      <button class="tab-btn" data-tab="printers">
+        <span>Printers (<span id="tab-printer-count">0</span>)</span>
+      </button>
+      <button class="tab-btn" data-tab="settings">
+        <span>Settings & Persistence</span>
+      </button>
+    </nav>
+
+    <!-- Tab Contents -->
+    <main class="tabs-content">
+      <!-- Logs Tab -->
+      <div id="tab-logs" class="tab-pane active">
+        <div class="log-controls">
+          <div class="log-filter-group">
+            <button class="filter-pill active" data-filter="all">All</button>
+            <button class="filter-pill" data-filter="jobs">Jobs</button>
+            <button class="filter-pill" data-filter="warn">Warnings</button>
+          </div>
+          <div class="log-actions">
+            <button id="btn-clear-logs" class="text-btn">Clear</button>
+            <button id="btn-copy-logs" class="text-btn">Copy</button>
+          </div>
+        </div>
+        <div class="console-wrapper" id="console-wrapper">
+          <div class="console-body" id="console-body">
+            <!-- Dynamic logs inserted here -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Printers Tab -->
+      <div id="tab-printers" class="tab-pane">
+        <div class="printers-header">
+          <span>Detected Windows Printers</span>
+          <span class="subtext">Automatically synchronized with Cloud server</span>
+        </div>
+        <div class="printers-list" id="printers-list">
+          <div class="empty-state">Scanning Windows printers...</div>
+        </div>
+      </div>
+
+      <!-- Settings & Persistence Tab -->
+      <div id="tab-settings" class="tab-pane">
+        <div class="settings-card">
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong>Auto-Start on Boot</strong>
+                <p>Launch silently in system tray when Windows starts</p>
+              </div>
+              <label class="switch">
+                <input type="checkbox" id="chk-autostart">
+                <span class="slider round"></span>
+              </label>
+            </div>
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong>Prevent Sleep Mode</strong>
+                <p>Keep Windows and screen awake during store hours</p>
+              </div>
+              <button id="btn-power-plan" class="action-btn primary small">Prevent Sleep</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="settings-group">
+            <div class="setting-row">
+              <div class="setting-info">
+                <strong>Cloud Server Pairing</strong>
+                <p id="settings-pairing-desc">Paired with local server</p>
+              </div>
+              <button id="btn-show-pair" class="action-btn outline small">Pair / Change</button>
+            </div>
+            <div class="setting-row danger-row">
+              <div class="setting-info">
+                <strong>Unpair Agent</strong>
+                <p>Erase security key and stop connection</p>
+              </div>
+              <button id="btn-unpair" class="action-btn danger small">Unpair</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="setting-row">
+            <div class="setting-info">
+              <strong>Close Action</strong>
+              <p>Closing window keeps print agent running in background tray</p>
+            </div>
+            <button id="btn-quit-app" class="action-btn outline danger small">Quit Entirely</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Pairing Modal -->
+    <div id="modal-pair" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Pair Print Agent</h3>
+          <button id="btn-close-modal" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body">
+          <p class="modal-desc">
+            Enter your Cloud Server URL and the 8-character pairing code from <strong>Admin Dashboard &gt; Computers</strong>.
+          </p>
+          <div class="form-group">
+            <label for="input-server-url">Cloud Server URL</label>
+            <input type="url" id="input-server-url" placeholder="http://localhost:5000 or https://shop.example.com" value="http://localhost:5000" />
+          </div>
+          <div class="form-group">
+            <label for="input-pair-code">8-Character Pairing Code</label>
+            <input type="text" id="input-pair-code" placeholder="e.g. ABCD2345" maxlength="8" style="text-transform: uppercase; letter-spacing: 2px; font-weight: 700;" />
+          </div>
+          <div id="pair-error" class="error-msg hidden"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="btn-cancel-pair" class="action-btn secondary">Cancel</button>
+          <button id="btn-submit-pair" class="action-btn primary">Connect &amp; Pair</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
