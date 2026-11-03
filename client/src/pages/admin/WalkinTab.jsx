@@ -39,17 +39,26 @@ export default function WalkinTab({ onCreated }) {
   const [previewUrl, setPreviewUrl] = useState(null);
 
   const [isIdLayout, setIsIdLayout] = useState(false);
-  const [cardsPerPage, setCardsPerPage] = useState(2);
+  
+  // Interactive Free-Placement Canvas States
+  const [idElements, setIdElements] = useState([]);
+  const [selectedElementId, setSelectedElementId] = useState(null);
 
-  // Multi-File & Per-file Page Ranges + Validation
-  const [uploadedFiles, setUploadedFiles] = useState([]);
-  const [fileOffsets, setFileOffsets] = useState([]);
+  // Mouse Interaction States (Dragging vs Resizing)
+  const [interactionMode, setInteractionMode] = useState(null); // 'drag' | 'resize-se'
+  const [activeElId, setActiveElId] = useState(null);
+  const [interactionStart, setInteractionStart] = useState({ x: 0, y: 0, elX: 0, elY: 0, elW: 0, elH: 0 });
+  const canvasRef = useRef(null);
 
   // Cropping States
-  const [selectedFiles, setSelectedFiles] = useState([]);
   const [cropModalOpen, setCropModalOpen] = useState(false);
   const [currentCropImageSrc, setCurrentCropImageSrc] = useState(null);
   const [currentCropIndex, setCurrentCropIndex] = useState(null);
+
+  // Multi-File & Page Ranges
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [fileOffsets, setFileOffsets] = useState([]);
+  const [selectedFiles, setSelectedFiles] = useState([]);
 
   useEffect(() => {
     getRates()
@@ -61,13 +70,11 @@ export default function WalkinTab({ onCreated }) {
 
   function handleChange(e) {
     const { name, value, type, checked } = e.target;
-    
     if (name === "phone") {
       const numericValue = value.replace(/\D/g, "").slice(0, 10);
       setForm((prev) => ({ ...prev, phone: numericValue }));
       return;
     }
-
     setForm((prev) => ({
       ...prev,
       [name]: type === "checkbox" ? checked : value,
@@ -92,7 +99,24 @@ export default function WalkinTab({ onCreated }) {
       if (isIdLayout) {
         const combinedSelected = [...selectedFiles, ...chosenFiles];
         setSelectedFiles(combinedSelected);
-        const compiledBlob = await compileIdCardsToA4Pdf(combinedSelected, cardsPerPage);
+
+        const newElements = combinedSelected.map((f, idx) => ({
+          id: `id-el-${Date.now()}-${idx}`,
+          file: f,
+          name: f.name,
+          url: URL.createObjectURL(f),
+          x: 15 + ((idx % 2) * 95),
+          y: 15 + (Math.floor(idx / 2) * 62),
+          width: 85.6,
+          height: 54,
+          rotation: 0
+        }));
+        setIdElements(newElements);
+        if (!selectedElementId && newElements.length > 0) {
+          setSelectedElementId(newElements[0].id);
+        }
+
+        const compiledBlob = await compileIdCardsToA4Pdf(newElements, 2);
         const compiledFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
         const { pages } = await countPages(compiledFile);
         setFile(compiledFile);
@@ -124,17 +148,157 @@ export default function WalkinTab({ onCreated }) {
     e.target.value = "";
   }
 
+  function handleCanvasElementUpdate(id, field, value) {
+    setIdElements(prev => {
+      const updated = prev.map(el => el.id === id ? { ...el, [field]: parseFloat(value) || 0 } : el);
+      compileIdCardsToA4Pdf(updated, 2).then(async (compiledBlob) => {
+        const compiledFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
+        const { pages } = await countPages(compiledFile);
+        setFile(compiledFile);
+        setForm(f => ({ ...f, pages }));
+      }).catch(() => {});
+      return updated;
+    });
+  }
+
+  function handleMouseDown(e, el, mode) {
+    e.stopPropagation();
+    setSelectedElementId(el.id);
+    setInteractionMode(mode);
+    setActiveElId(el.id);
+
+    if (canvasRef.current) {
+      const rect = canvasRef.current.getBoundingClientRect();
+      const pxToMmX = 210 / rect.width;
+      const pxToMmY = 297 / rect.height;
+
+      setInteractionStart({
+        mouseX: (e.clientX - rect.left) * pxToMmX,
+        mouseY: (e.clientY - rect.top) * pxToMmY,
+        elX: el.x,
+        elY: el.y,
+        elW: el.width,
+        elH: el.height
+      });
+    }
+  }
+
+  function handleMouseMove(e) {
+    if (!iteractionActiveCheck() || !canvasRef.current) return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const pxToMmX = 210 / rect.width;
+    const pxToMmY = 297 / rect.height;
+
+    const currentMouseX = (e.clientX - rect.left) * pxToMmX;
+    const currentMouseY = (e.clientY - rect.top) * pxToMmY;
+
+    const deltaX = currentMouseX - interactionStart.mouseX;
+    const deltaY = currentMouseY - interactionStart.mouseY;
+
+    setIdElements(prev =>
+      prev.map(el => {
+        if (el.id !== activeElId) return el;
+
+        if (interactionMode === 'drag') {
+          const newX = Math.max(0, Math.min(210 - el.width, interactionStart.elX + deltaX));
+          const newY = Math.max(0, Math.min(297 - el.height, interactionStart.elY + deltaY));
+          return { ...el, x: Math.round(newX * 10) / 10, y: Math.round(newY * 10) / 10 };
+        } else if (interactionMode === 'resize-se') {
+          const newW = Math.max(15, Math.min(210 - el.x, interactionStart.elW + deltaX));
+          const newH = Math.max(15, Math.min(297 - el.y, interactionStart.elH + deltaY));
+          return { ...el, width: Math.round(newW * 10) / 10, height: Math.round(newH * 10) / 10 };
+        }
+        return el;
+      })
+    );
+  }
+
+  function iteractionActiveCheck() {
+    return interactionMode !== null && activeElId !== null;
+  }
+
+  function handleMouseUp() {
+    if (interactionMode) {
+      setInteractionMode(null);
+      setActiveElId(null);
+      compileIdCardsToA4Pdf(idElements, 2).then(async (compiledBlob) => {
+        const compiledFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
+        const { pages } = await countPages(compiledFile);
+        setFile(compiledFile);
+        setForm(f => ({ ...f, pages }));
+      }).catch(() => {});
+    }
+  }
+
+  function removeCanvasElement(id) {
+    setIdElements(prev => {
+      const updated = prev.filter(el => el.id !== id);
+      setSelectedFiles(updated.map(el => el.file));
+      if (selectedElementId === id) {
+        setSelectedElementId(updated.length > 0 ? updated[0].id : null);
+      }
+      compileIdCardsToA4Pdf(updated, 2).then(async (compiledBlob) => {
+        const compiledFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
+        const { pages } = await countPages(compiledFile);
+        setFile(compiledFile);
+        setForm(f => ({ ...f, pages }));
+      }).catch(() => {});
+      return updated;
+    });
+  }
+
+  const selectedCanvasItem = idElements.find(el => el.id === selectedElementId);
+
+  // Crop Complete: Reads natural width/height of cropped blob to automatically set canvas dimensions in mm
+  async function handleCropComplete(croppedFile) {
+    if (currentCropIndex === null) return;
+    const updatedFiles = [...selectedFiles];
+    updatedFiles[currentCropIndex] = croppedFile;
+    setSelectedFiles(updatedFiles);
+
+    const url = URL.createObjectURL(croppedFile);
+    const img = new Image();
+    img.src = url;
+    await new Promise((resolve) => {
+      img.onload = resolve;
+    });
+
+    const naturalWidth = img.naturalWidth || 100;
+    const naturalHeight = img.naturalHeight || 100;
+    const ratio = naturalWidth / naturalHeight;
+
+    const baseWidth = 85.6; // standard reference width in mm
+    const calculatedHeight = Math.round((baseWidth / ratio) * 10) / 10;
+
+    const updatedElements = [...idElements];
+    if (updatedElements[currentCropIndex]) {
+      updatedElements[currentCropIndex] = {
+        ...updatedElements[currentCropIndex],
+        file: croppedFile,
+        url: url,
+        width: baseWidth,
+        height: calculatedHeight
+      };
+    }
+    setIdElements(updatedElements);
+    setCropModalOpen(false);
+
+    const compiledBlob = await compileIdCardsToA4Pdf(updatedElements, 2);
+    const compiledFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
+    const { pages } = await countPages(compiledFile);
+    setFile(compiledFile);
+    setForm(prev => ({ ...prev, pages }));
+  }
+
   function removeFile(indexToRemove) {
     const updatedList = uploadedFiles.filter((_, idx) => idx !== indexToRemove);
     setUploadedFiles(updatedList);
-
     if (updatedList.length === 0) {
       setFile(null);
       setForm((prev) => ({ ...prev, pages: 0, pageRange: "" }));
       setFileOffsets([]);
       return;
     }
-
     rebuildMergedFile(updatedList);
   }
 
@@ -144,11 +308,9 @@ export default function WalkinTab({ onCreated }) {
       const allRawFiles = currentList.map((item) => item.file);
       const { mergedFile, filePageOffsets } = await mergePdfsToSingle(allRawFiles);
       setFileOffsets(filePageOffsets);
-      
       const { pages } = await countPages(mergedFile);
       setFile(mergedFile);
       setForm((prev) => ({ ...prev, pages }));
-
       updateGlobalPageRange(currentList, filePageOffsets);
     } catch (err) {
       setError(err.message);
@@ -160,7 +322,6 @@ export default function WalkinTab({ onCreated }) {
   function handleFileRangeChange(index, rangeValue) {
     const updated = [...uploadedFiles];
     updated[index].pageRange = rangeValue;
-    
     const maxPages = fileOffsets[index]?.pageCount || updated[index].pageCount;
     let rangeErr = "";
 
@@ -199,10 +360,8 @@ export default function WalkinTab({ onCreated }) {
     const absoluteRanges = [];
     list.forEach((item, idx) => {
       if (item.rangeError) return;
-      
       const fileOffset = offsets[idx];
       if (!fileOffset) return;
-
       const rangeVal = item.pageRange.trim();
       
       if (!rangeVal) {
@@ -226,34 +385,6 @@ export default function WalkinTab({ onCreated }) {
     setForm((prev) => ({ ...prev, pageRange: absoluteRanges.filter(Boolean).join(", ") }));
   }
 
-  async function handleCropComplete(croppedFile) {
-    const updatedFiles = [...selectedFiles];
-    updatedFiles[currentCropIndex] = croppedFile;
-    setSelectedFiles(updatedFiles);
-    
-    const compiledBlob = await compileIdCardsToA4Pdf(updatedFiles, cardsPerPage);
-    const finalFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
-    const { pages } = await countPages(finalFile);
-    setFile(finalFile);
-    setForm((prev) => ({ ...prev, pages }));
-  }
-
-  async function handleMove(index, direction) {
-    const newIndex = index + direction;
-    if (newIndex < 0 || newIndex >= selectedFiles.length) return;
-    const updatedFiles = [...selectedFiles];
-    const temp = updatedFiles[index];
-    updatedFiles[index] = updatedFiles[newIndex];
-    updatedFiles[newIndex] = temp;
-    setSelectedFiles(updatedFiles);
-
-    const compiledBlob = await compileIdCardsToA4Pdf(updatedFiles, cardsPerPage);
-    const finalFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
-    const { pages } = await countPages(finalFile);
-    setFile(finalFile);
-    setForm((prev) => ({ ...prev, pages }));
-  }
-
   async function generateSelectedPagesPreview() {
     if (!file) return;
     try {
@@ -262,7 +393,6 @@ export default function WalkinTab({ onCreated }) {
       const totalPages = pdfDoc.getPageCount();
 
       let pagesToInclude = [];
-
       if (!form.pageRange.trim()) {
         pagesToInclude = Array.from({ length: totalPages }, (_, i) => i);
       } else {
@@ -296,7 +426,6 @@ export default function WalkinTab({ onCreated }) {
     }
   }
 
-  // Live Quote calculation
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
@@ -342,6 +471,7 @@ export default function WalkinTab({ onCreated }) {
       setFile(null);
       setUploadedFiles([]);
       setSelectedFiles([]);
+      setIdElements([]);
       setFileKey((k) => k + 1);
       setPrice(0);
       setPrintPages(0);
@@ -400,38 +530,15 @@ export default function WalkinTab({ onCreated }) {
             setFile(null);
             setUploadedFiles([]);
             setSelectedFiles([]);
+            setIdElements([]);
             setForm(prev => ({ ...prev, pages: 0 }));
           }} 
         />
-        <strong>Smart ID Card Layout Mode</strong> (Automatically arranges multiple ID photos into an A4 card grid)
+        <strong>Interactive Custom ID / Photo Placement Canvas</strong> (Crop sets size, drag/resize handles, manual overrides)
       </label>
 
-      {isIdLayout && (
-        <label style={{ marginBottom: "12px" }}>
-          Photos per A4 Page
-          <select
-            value={cardsPerPage}
-            onChange={async (e) => {
-              const perPage = Number(e.target.value);
-              setCardsPerPage(perPage);
-              if (selectedFiles.length > 0) {
-                const compiledBlob = await compileIdCardsToA4Pdf(selectedFiles, perPage);
-                const finalFile = new File([compiledBlob], "smart-id-layout.pdf", { type: "application/pdf" });
-                const { pages } = await countPages(finalFile);
-                setFile(finalFile);
-                setForm(prev => ({ ...prev, pages }));
-              }
-            }}
-          >
-            <option value={2}>2 Cards per page (Standard Front/Back)</option>
-            <option value={4}>4 Cards per page (Compact Sheet)</option>
-            <option value={6}>6 Cards per page (Dense Sheet)</option>
-          </select>
-        </label>
-      )}
-
       <label>
-        {isIdLayout ? "Upload multiple ID images (Front & Back)" : "Upload PDF, JPG or PNG (max 20 MB each)"}
+        {isIdLayout ? "Upload ID or Photo Images (Front/Back/Passports)" : "Upload PDF, JPG or PNG (max 20 MB each)"}
         <input
           ref={fileInputRef}
           key={fileKey}
@@ -443,7 +550,228 @@ export default function WalkinTab({ onCreated }) {
         />
       </label>
 
-      {/* Multiple File List with Individual Page Range Inputs & Add More Button */}
+      {/* Interactive Free-Placement Canvas Workspace */}
+      {isIdLayout && idElements.length > 0 && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 300px", gap: "16px", background: "rgba(255,255,255,0.02)", padding: "14px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.08)", margin: "14px 0" }}>
+          
+          {/* Left: Visual A4 Canvas Preview */}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", marginBottom: "8px" }}>
+              <span style={{ fontSize: "12px", fontWeight: "bold" }}>A4 Sheet Canvas (210 × 297 mm)</span>
+              <span className="note" style={{ fontSize: "11px" }}>Crop dictates card dimensions</span>
+            </div>
+
+            <div
+              ref={canvasRef}
+              onMouseMove={handleMouseMove}
+              onMouseUp={handleMouseUp}
+              onMouseLeave={handleMouseUp}
+              style={{
+                position: "relative",
+                width: "100%",
+                maxWidth: "380px",
+                aspectRatio: "210 / 297",
+                background: "#ffffff",
+                borderRadius: "4px",
+                boxShadow: "0 8px 20px rgba(0,0,0,0.4)",
+                overflow: "hidden",
+                cursor: interactionMode ? "grabbing" : "default"
+              }}
+            >
+              {idElements.map((el) => {
+                const leftPct = (el.x / 210) * 100;
+                const topPct = (el.y / 297) * 100;
+                const widthPct = (el.width / 210) * 100;
+                const heightPct = (el.height / 297) * 100;
+                const isSelected = el.id === selectedElementId;
+
+                return (
+                  <div
+                    key={el.id}
+                    onMouseDown={(e) => handleMouseDown(e, el, 'drag')}
+                    style={{
+                      position: "absolute",
+                      left: `${leftPct}%`,
+                      top: `${topPct}%`,
+                      width: `${widthPct}%`,
+                      height: `${heightPct}%`,
+                      transform: `rotate(${el.rotation}deg)`,
+                      border: isSelected ? "2px solid #10b981" : "1px dashed #94a3b8",
+                      background: "rgba(0,0,0,0.04)",
+                      cursor: "move",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      overflow: "hidden",
+                      borderRadius: "3px",
+                      userSelect: "none"
+                    }}
+                  >
+                    <img
+                      src={el.url}
+                      alt={el.name}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", pointerEvents: "none" }}
+                    />
+                    
+                    {/* Dimension Badge */}
+                    <div style={{ position: "absolute", bottom: 2, right: 3, background: "rgba(0,0,0,0.7)", color: "#fff", fontSize: "8px", padding: "1px 3px", borderRadius: "2px" }}>
+                      {Math.round(el.width)}×{Math.round(el.height)}mm
+                    </div>
+
+                    {/* Resize Handle at Bottom-Right Corner */}
+                    {isSelected && (
+                      <div
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleMouseDown(e, el, 'resize-se');
+                        }}
+                        style={{
+                          position: "absolute",
+                          bottom: 0,
+                          right: 0,
+                          width: "12px",
+                          height: "12px",
+                          background: "#10b981",
+                          cursor: "se-resize",
+                          borderRadius: "2px 0 0 0"
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right: Inspector Panel */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px", background: "rgba(255,255,255,0.03)", padding: "12px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <h4 style={{ fontSize: "13px", margin: 0, textTransform: "uppercase", letterSpacing: "0.5px" }}>Card Inspector</h4>
+
+            {selectedCanvasItem ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px", fontSize: "12px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontWeight: 500, color: "#10b981", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "180px" }}>{selectedCanvasItem.name}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeCanvasElement(selectedCanvasItem.id)}
+                    style={{ background: "#ef4444", color: "#fff", border: "none", padding: "2px 6px", borderRadius: "4px", fontSize: "10px", cursor: "pointer" }}
+                  >
+                    Remove
+                  </button>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <div>
+                    <label className="note" style={{ fontSize: "10px" }}>Width (mm)</label>
+                    <input
+                      type="number"
+                      value={selectedCanvasItem.width}
+                      onChange={(e) => handleCanvasElementUpdate(selectedCanvasItem.id, "width", e.target.value)}
+                      style={{ width: "100%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "4px", borderRadius: "4px", fontSize: "12px" }}
+                    />
+                  </div>
+                  <div>
+                    <label className="note" style={{ fontSize: "10px" }}>Height (mm)</label>
+                    <input
+                      type="number"
+                      value={selectedCanvasItem.height}
+                      onChange={(e) => handleCanvasElementUpdate(selectedCanvasItem.id, "height", e.target.value)}
+                      style={{ width: "100%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "4px", borderRadius: "4px", fontSize: "12px" }}
+                    />
+                  </div>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" }}>
+                  <div>
+                    <label className="note" style={{ fontSize: "10px" }}>X Pos (mm)</label>
+                    <input
+                      type="number"
+                      value={selectedCanvasItem.x}
+                      onChange={(e) => handleCanvasElementUpdate(selectedCanvasItem.id, "x", e.target.value)}
+                      style={{ width: "100%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "4px", borderRadius: "4px", fontSize: "12px" }}
+                    />
+                  </div>
+                  <div>
+                    <label className="note" style={{ fontSize: "10px" }}>Y Pos (mm)</label>
+                    <input
+                      type="number"
+                      value={selectedCanvasItem.y}
+                      onChange={(e) => handleCanvasElementUpdate(selectedCanvasItem.id, "y", e.target.value)}
+                      style={{ width: "100%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "4px", borderRadius: "4px", fontSize: "12px" }}
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="note" style={{ fontSize: "10px" }}>Rotation</label>
+                  <select
+                    value={selectedCanvasItem.rotation}
+                    onChange={(e) => handleCanvasElementUpdate(selectedCanvasItem.id, "rotation", e.target.value)}
+                    style={{ width: "100%", background: "rgba(15,23,42,0.9)", border: "1px solid rgba(255,255,255,0.1)", color: "#fff", padding: "4px", borderRadius: "4px", fontSize: "12px" }}
+                  >
+                    <option value="0">0° (Normal)</option>
+                    <option value="90">90° Clockwise</option>
+                    <option value="180">180° Inverted</option>
+                    <option value="270">270° Counter-Clockwise</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCanvasElementUpdate(selectedCanvasItem.id, "width", 85.6);
+                      handleCanvasElementUpdate(selectedCanvasItem.id, "height", 54);
+                    }}
+                    style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "none", color: "#cbd5e1", padding: "4px", borderRadius: "4px", fontSize: "10px", cursor: "pointer" }}
+                  >
+                    ID (85×54)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      handleCanvasElementUpdate(selectedCanvasItem.id, "width", 35);
+                      handleCanvasElementUpdate(selectedCanvasItem.id, "height", 45);
+                    }}
+                    style={{ flex: 1, background: "rgba(255,255,255,0.06)", border: "none", color: "#cbd5e1", padding: "4px", borderRadius: "4px", fontSize: "10px", cursor: "pointer" }}
+                  >
+                    Passport (35×45)
+                  </button>
+                </div>
+
+                <button
+                  type="button"
+                  className="small ghost"
+                  style={{ fontSize: "11px", padding: "6px", width: "100%", marginTop: "4px" }}
+                  onClick={() => {
+                    setCurrentCropImageSrc(selectedCanvasItem.url);
+                    setCurrentCropIndex(idElements.findIndex(el => el.id === selectedCanvasItem.id));
+                    setCropModalOpen(true);
+                  }}
+                >
+                  ✏️ Open Crop & Rotate Editor (Auto-sizes)
+                </button>
+              </div>
+            ) : (
+              <p className="note" style={{ textAlign: "center", padding: "20px 0", fontSize: "12px" }}>
+                Click any card on the canvas to inspect or resize.
+              </p>
+            )}
+
+            <button
+              type="button"
+              className="small ghost"
+              onClick={() => fileInputRef.current?.click()}
+              style={{ fontSize: "11px", marginTop: "auto" }}
+            >
+              ➕ Add more photos
+            </button>
+          </div>
+
+        </div>
+      )}
+
+      {/* Multiple File List for Standard Mode */}
       {uploadedFiles.length > 0 && !isIdLayout && (
         <div style={{ margin: "14px 0", display: "flex", flexDirection: "column", gap: "12px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -484,57 +812,6 @@ export default function WalkinTab({ onCreated }) {
               {item.rangeError && <span className="error" style={{ fontSize: "12px" }}>{item.rangeError}</span>}
             </div>
           ))}
-        </div>
-      )}
-
-      {/* Staged files thumbnail preview for ID Layout mode */}
-      {selectedFiles.length > 0 && isIdLayout && selectedFiles[0]?.type?.startsWith("image/") && (
-        <div style={{ margin: "14px 0" }}>
-          <p className="note" style={{ marginBottom: "6px" }}>Crop, rotate & arrange photo order:</p>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "10px" }}>
-            {selectedFiles.map((f, index) => {
-              const previewUrl = URL.createObjectURL(f);
-              return (
-                <div key={index} style={{ background: "rgba(255,255,255,0.05)", borderRadius: "8px", padding: "8px", textAlign: "center" }}>
-                  <img src={previewUrl} alt={`Upload ${index}`} style={{ width: "100%", height: "70px", objectFit: "cover", borderRadius: "4px" }} />
-                  
-                  <div style={{ display: "flex", justifyContent: "space-between", marginTop: "6px", gap: "4px" }}>
-                    <button
-                      type="button"
-                      className="small ghost"
-                      disabled={index === 0}
-                      style={{ fontSize: "10px", padding: "2px 4px", flex: 1 }}
-                      onClick={() => handleMove(index, -1)}
-                    >
-                      ⬅️
-                    </button>
-                    <button
-                      type="button"
-                      className="small ghost"
-                      disabled={index === selectedFiles.length - 1}
-                      style={{ fontSize: "10px", padding: "2px 4px", flex: 1 }}
-                      onClick={() => handleMove(index, 1)}
-                    >
-                      ➡️
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    className="small ghost"
-                    style={{ fontSize: "11px", padding: "4px 6px", width: "100%", marginTop: "6px" }}
-                    onClick={() => {
-                      setCurrentCropImageSrc(previewUrl);
-                      setCurrentCropIndex(index);
-                      setCropModalOpen(true);
-                    }}
-                  >
-                    ✏️ Crop & Rotate
-                  </button>
-                </div>
-              );
-            })}
-          </div>
         </div>
       )}
 
@@ -640,7 +917,7 @@ export default function WalkinTab({ onCreated }) {
       {error && <p className="error">{error}</p>}
 
       <button type="submit" disabled={loading || counting || Boolean(rangeError) || hasAnyFileError} style={{ marginTop: "16px" }}>
-        {loading ? "Creating order..." : `Create Walk-in Order (₹${price})`}
+        {loading ? "Creating order..." : `Create Walk-in Order (₹{price})`}
       </button>
 
       {/* Selected Pages Preview Modal */}
@@ -668,7 +945,7 @@ export default function WalkinTab({ onCreated }) {
       <ImageCropModal
         open={cropModalOpen}
         imageSrc={currentCropImageSrc}
-        aspect={isIdLayout ? 85.6 / 53.98 : undefined}
+        aspect={undefined}
         onClose={() => setCropModalOpen(false)}
         onCropComplete={handleCropComplete}
       />
