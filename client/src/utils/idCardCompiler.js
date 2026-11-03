@@ -1,40 +1,54 @@
 import { PDFDocument } from 'pdf-lib';
 
-export async function compileIdCardsToA4Pdf(imageFiles, cardsPerPage = 2) {
+export async function compileIdCardsToA4Pdf(elements, cardsPerPage = 2) {
   const pdfDoc = await PDFDocument.create();
   
+  // A4 dimensions in points (1 mm = 2.83465 points)
   const A4_WIDTH = 595.28;
   const A4_HEIGHT = 841.89;
-  
-  // Standard ID card size in points (~85.6mm x 53.98mm)
-  const ID_WIDTH = 242; 
-  const ID_HEIGHT = 153;
-  
-  const MARGIN_X = 50;
-  const MARGIN_Y = 50;
-  const GAP_X = 30;
-  const GAP_Y = 30;
-  
-  const COLS = 2;
-  const ROWS = cardsPerPage === 2 ? 1 : Math.ceil(cardsPerPage / COLS);
-  const CARDS_PER_PAGE = COLS * ROWS;
+  const MM_TO_POINTS = 2.83465;
 
   let page = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
-  let cardCount = 0;
 
-  for (let i = 0; i < imageFiles.length; i++) {
-    const file = imageFiles[i];
-    
-    if (cardCount > 0 && cardCount % CARDS_PER_PAGE === 0) {
-      page = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+  // Check if elements are custom layout objects with x, y, width, height, rotation
+  const isCustomLayout = elements.length > 0 && typeof elements[0] === 'object' && ('x' in elements[0] || 'width' in elements[0]);
+
+  for (let i = 0; i < elements.length; i++) {
+    let file, xMm, yMm, widthMm, heightMm, rotation;
+
+    if (isCustomLayout) {
+      const el = elements[i];
+      file = el.file;
+      xMm = el.x ?? 15;
+      yMm = el.y ?? 15;
+      widthMm = el.width ?? 85.6;
+      heightMm = el.height ?? 54;
+      rotation = el.rotation ?? 0;
+    } else {
+      // Fallback for plain File objects array
+      file = elements[i];
+      const COLS = 2;
+      const col = i % COLS;
+      const row = Math.floor(i / COLS);
+      
+      if (i > 0 && i % (COLS * 2) === 0) {
+        page = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+      }
+      
+      xMm = 20 + (col * 95);
+      yMm = 20 + (row * 65);
+      widthMm = 85.6;
+      heightMm = 54;
+      rotation = 0;
     }
 
-    const indexOnPage = cardCount % CARDS_PER_PAGE;
-    const col = indexOnPage % COLS;
-    const row = Math.floor(indexOnPage / COLS);
-
-    const x = MARGIN_X + col * (ID_WIDTH + GAP_X);
-    const y = A4_HEIGHT - MARGIN_Y - (row + 1) * ID_HEIGHT - row * GAP_Y;
+    // Convert millimeters to PDF points
+    const x = xMm * MM_TO_POINTS;
+    const width = widthMm * MM_TO_POINTS;
+    const height = heightMm * MM_TO_POINTS;
+    
+    // PDF coordinate system origin is bottom-left, so invert Y axis from top-left mm
+    const y = A4_HEIGHT - (yMm * MM_TO_POINTS) - height;
 
     const arrayBuffer = await file.arrayBuffer();
     let embeddedImage;
@@ -48,11 +62,10 @@ export async function compileIdCardsToA4Pdf(imageFiles, cardsPerPage = 2) {
     page.drawImage(embeddedImage, {
       x,
       y,
-      width: ID_WIDTH,
-      height: ID_HEIGHT,
+      width,
+      height,
+      rotate: { type: 'degrees', angle: Number(rotation) || 0 },
     });
-
-    cardCount++;
   }
 
   const pdfBytes = await pdfDoc.save();
