@@ -113,6 +113,7 @@ async function findPayable(req, res) {
 
 async function createOrder(body, source, file, staffUser) {
   const { customerName, phone } = body;
+  const isIdLayout = toBool(body.isIdLayout);
 
   if (!/^[0-9]{10}$/.test(phone || "")) {
     throw new Error("Phone number must be 10 digits");
@@ -130,7 +131,7 @@ async function createOrder(body, source, file, staffUser) {
   }
 
   try {
-    if (!(pages >= 1)) throw new Error("Pages must be 1 or more");
+    if (!isIdLayout && !(pages >= 1)) throw new Error("Pages must be 1 or more");
     const range = parsePageRange(body.pageRange, pages);
 
     const printOptions = {
@@ -141,6 +142,7 @@ async function createOrder(body, source, file, staffUser) {
       stapling: toBool(body.stapling),
       binding: toBool(body.binding),
       urgent: toBool(body.urgent),
+      isIdLayout,
     };
 
     if (printOptions.doubleSided && !DOUBLE_SIDED_AVAILABLE) {
@@ -208,7 +210,9 @@ router.get("/rates", (req, res) => {
 router.post("/quote", (req, res) => {
   const total = Number(req.body.pages) || 0;
   const copies = Number(req.body.copies) || 1;
-  if (total < 1 || copies < 1) return res.json({ price: 0, printPages: 0 });
+  const isIdLayout = toBool(req.body.isIdLayout);
+
+  if (!isIdLayout && (total < 1 || copies < 1)) return res.json({ price: 0, printPages: 0 });
 
   try {
     const range = parsePageRange(req.body.pageRange, total);
@@ -221,6 +225,7 @@ router.post("/quote", (req, res) => {
       stapling: toBool(req.body.stapling),
       binding: toBool(req.body.binding),
       urgent: toBool(req.body.urgent),
+      isIdLayout,
     });
     res.json({ price, printPages: range.count });
   } catch (err) {

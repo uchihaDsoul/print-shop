@@ -10,6 +10,8 @@ const DEFAULTS = {
   },
   doubleSidedDiscountPercent: 10,
   extras: { stapling: 0, binding: 30, urgent: 20 },
+  idCardBw: 10,
+  idCardColor: 20,
   // Full A4 photo: price per sheet (placeholders, set real ones on the Pricing page)
   photo: { a4: { bw: 25, color: 40 } },
   // Passport and ID photo sizes: price per piece. Only "enabled" and the prices can be edited.
@@ -126,6 +128,8 @@ function validatePricing(input) {
       binding: num(e.binding, "Binding charge"),
       urgent: num(e.urgent, "Urgent charge"),
     },
+    idCardBw: num(orDefault(input && input.idCardBw, DEFAULTS.idCardBw), "Smart ID card B/W rate"),
+    idCardColor: num(orDefault(input && input.idCardColor, DEFAULTS.idCardColor), "Smart ID card color rate"),
     photo: {
       a4: {
         bw: num(orDefault(pa4.bw, DEFAULTS.photo.a4.bw), "A4 photo black and white price"),
@@ -192,11 +196,19 @@ function calculatePrice({
   stapling,
   binding,
   urgent,
+  isIdLayout,
 }) {
-  const { rates, doubleSidedDiscountPercent, extras } = current;
-  const sizeRates = rates[size] || rates.A4;
-  const perPage = sizeRates[color ? "color" : "bw"];
-  const factor = doubleSided ? 1 - doubleSidedDiscountPercent / 100 : 1;
+  const { rates, doubleSidedDiscountPercent, extras, idCardBw, idCardColor } = current;
+  
+  let perPage = 0;
+  if (isIdLayout) {
+    perPage = color ? idCardColor : idCardBw;
+  } else {
+    const sizeRates = rates[size] || rates.A4;
+    perPage = sizeRates[color ? "color" : "bw"];
+  }
+
+  const factor = doubleSided && !isIdLayout ? 1 - doubleSidedDiscountPercent / 100 : 1;
   let total = pages * copies * perPage * factor;
 
   // stapling and binding are charged per copy, urgent once per order
